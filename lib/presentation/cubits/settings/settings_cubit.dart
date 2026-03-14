@@ -92,7 +92,7 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setZoom(double zoom) {
-    emit(state.copyWith(zoomLevel: zoom.clamp(0.5, 3.0)));
+    emit(state.copyWith(zoomLevel: zoom.clamp(0.1, 5.0)));
     _saveSettings();
   }
 

@@ -10,12 +10,48 @@ import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart'
 import 'package:logic_canvas/presentation/pages/home/home_page.dart';
 
 void main() async {
+  // We put this first to ensure it's logged to console ASAP
+  print('--- FLUTTER STARTING ---');
   WidgetsFlutterBinding.ensureInitialized();
+  print('--- BINDING INITIALIZED ---');
+  
+  // Custom Error Handling for Release Mode diagnosis
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('CRITICAL_FLUTTER_ERROR: ${details.exception}');
+  };
+
   debugPrint('🚀 BUILD_SYNC_TEST_ALPHA: Code is LIVE');
-  await Hive.initFlutter();
-  await Hive.openBox<bool>('progress');
-  configureDependencies();
-  runApp(const LogicCanvasApp());
+
+  try {
+    debugPrint('📦 Hive: Initializing...');
+    await Hive.initFlutter();
+    
+    debugPrint('📦 Hive: Opening progress box...');
+    await Hive.openBox<bool>('progress');
+    
+    debugPrint('📦 Hive: Opening settings box...');
+    await Hive.openBox('settings');
+    
+    debugPrint('📦 Hive: Opening drawing box...');
+    await Hive.openBox('drawing');
+    
+    debugPrint('📦 Hive: Boxes opened successfully');
+
+    debugPrint('💉 DI: Configuring dependencies...');
+    configureDependencies();
+    debugPrint('💉 DI: Dependencies configured');
+    
+    debugPrint('🚀 App: Running LogicCanvasApp...');
+    runApp(const LogicCanvasApp());
+  } catch (e) {
+    debugPrint('❌ CRITICAL_INIT_ERROR: $e');
+    runApp(
+      MaterialApp(
+        home: Scaffold(body: Center(child: Text('Initialization Error: $e'))),
+      ),
+    );
+  }
 }
 
 class LogicCanvasApp extends StatelessWidget {

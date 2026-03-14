@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:logic_canvas/domain/entities/stroke.dart';
@@ -14,6 +15,7 @@ class WhiteboardPainter extends CustomPainter {
   final bool isEraser;
   final Offset panOffset;
   final double zoomLevel;
+  final Map<String, ui.Picture>? svgPictures;
 
   WhiteboardPainter({
     required this.strokes,
@@ -26,6 +28,7 @@ class WhiteboardPainter extends CustomPainter {
     this.isEraser = false,
     required this.panOffset,
     required this.zoomLevel,
+    this.svgPictures,
   });
 
   @override
@@ -107,11 +110,30 @@ class WhiteboardPainter extends CustomPainter {
   void _drawIconStroke(Canvas canvas, Stroke stroke) {
     if (stroke.iconPath == null || stroke.points.isEmpty) return;
 
-    // TODO: Ideally use flutter_svg for SVG assets.
-    // Since I can't add dependencies easily without user confirmation,
-    // I will assume for now that some rendering mechanism exists or I need to add one.
-    // For now, I'll draw a placeholder or use the ML/Shape logic if I can't render SVG directly.
-    // WAIT: I should check if flutter_svg is in pubspec. It was NOT.
+    final center = stroke.points.first;
+    const size = 48.0; // Default icon size
+    final rect = Rect.fromCenter(center: center, width: size, height: size);
+
+    if (svgPictures != null && svgPictures!.containsKey(stroke.iconPath!)) {
+      final picture = svgPictures![stroke.iconPath!]!;
+      canvas.save();
+      canvas.translate(rect.left, rect.top);
+      
+      canvas.drawPicture(picture);
+      canvas.restore();
+    } else {
+      // Fallback: simple box with first letter or icon-like shape
+      final paint = Paint()
+        ..color = stroke.color.withValues(alpha: 0.5)
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), paint);
+      
+      final borderPaint = Paint()
+        ..color = stroke.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), borderPaint);
+    }
   }
 
   void _drawConnectorStroke(Canvas canvas, Stroke stroke) {

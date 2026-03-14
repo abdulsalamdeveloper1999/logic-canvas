@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:ui';
@@ -12,6 +13,7 @@ import 'package:logic_canvas/presentation/widgets/whiteboard_view.dart';
 import 'package:logic_canvas/presentation/widgets/problem_panel.dart';
 import 'package:logic_canvas/domain/entities/problem.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:logic_canvas/presentation/widgets/icon_picker_sheet.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -22,6 +24,7 @@ class HomePage extends StatelessWidget {
     final sidebarWidth = orientation == Orientation.landscape ? 350.0 : 280.0;
 
     return Scaffold(
+      backgroundColor: Colors.black,
       body: BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, settings) {
           return BlocBuilder<SelectionCubit, SelectionState>(
@@ -30,10 +33,8 @@ class HomePage extends StatelessWidget {
 
               return Stack(
                 children: [
-                  // 1. Edge-to-Edge Whiteboard View
-                  const Positioned.fill(child: WhiteboardView()),
+                   const Positioned.fill(child: WhiteboardView()),
 
-                  // 2. Floating Glassmorphic Top Bar
                   Positioned(
                     top: 0,
                     left: 0,
@@ -41,173 +42,19 @@ class HomePage extends StatelessWidget {
                     child: _buildTopBar(context, selectedProblem),
                   ),
 
-                  // 3. Problem Badge & Toolbar Layer
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        if (selectedProblem != null)
-                          Positioned(
-                            top: 100, // Below the floating top bar
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: _buildProblemBadge(
-                                context,
-                                selectedProblem,
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          bottom: orientation == Orientation.landscape
-                              ? (settings.showToolbar ? 40 : -100)
-                              : null,
-                          right: orientation == Orientation.portrait
-                              ? (settings.showToolbar ? 20 : -100)
-                              : 0,
-                          left: orientation == Orientation.landscape ? 0 : null,
-                          top: orientation == Orientation.portrait ? 100 : null,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 400),
-                            opacity: settings.showToolbar ? 1.0 : 0.0,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.easeInOutQuart,
-                              child: orientation == Orientation.landscape
-                                  ? Center(
-                                      child: _buildFloatingToolbar(
-                                        context,
-                                        settings,
-                                        false,
-                                      ),
-                                    )
-                                  : _buildFloatingToolbar(
-                                      context,
-                                      settings,
-                                      true,
-                                    ),
-                            ),
-                          ),
-                        ),
-
-                        // Toolbar Toggle Button (Always visible)
-                        Positioned(
-                          bottom: orientation == Orientation.landscape
-                              ? 10
-                              : 20,
-                          left: orientation == Orientation.landscape ? 0 : null,
-                          right: orientation == Orientation.landscape
-                              ? 0
-                              : (orientation == Orientation.portrait
-                                    ? 20
-                                    : null),
-                          child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildRecenterButton(
-                                  context,
-                                  settings.panOffset != Offset.zero ||
-                                      settings.zoomLevel != 1.0,
-                                ),
-                                const SizedBox(width: 12),
-                                _buildToolbarToggle(
-                                  context,
-                                  settings.showToolbar,
-                                  orientation,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        // Diagram Asset Bar Overlay
-                        BlocBuilder<SettingsCubit, SettingsState>(
-                          builder: (context, settings) {
-                            if (settings.toolMode != ToolMode.diagram) return const SizedBox.shrink();
-                            return Positioned(
-                              bottom: MediaQuery.of(context).orientation == Orientation.landscape ? 100 : 160,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: _buildAssetBar(context, settings),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                  if (selectedProblem != null)
+                    Positioned(
+                      top: 100,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: _buildProblemBadge(context, selectedProblem),
+                      ),
                     ),
-                  ),
 
-                  // Floating Sidebar Overlay
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeInOutQuart,
-                    left: settings.showSidebar ? 0 : -sidebarWidth,
-                    top: 0,
-                    bottom: 0,
-                    width:
-                        sidebarWidth +
-                        60, // Include toggle button in hit-test area
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Blur and Sidebar
-                        Positioned(
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: sidebarWidth,
-                          child: ClipRRect(
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surface.withValues(alpha: 0.8),
-                                  border: Border(
-                                    right: BorderSide(
-                                      color: Theme.of(
-                                        context,
-                                      ).dividerColor.withValues(alpha: 0.1),
-                                    ),
-                                  ),
-                                  boxShadow: [
-                                    if (settings.showSidebar)
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                        blurRadius: 40,
-                                        spreadRadius: 5,
-                                      ),
-                                  ],
-                                ),
-                                child: const ProblemPanel(),
-                              ),
-                            ),
-                          ),
-                        ),
+                  _buildSidebar(context, settings, sidebarWidth),
 
-                        // Top-Left Chevron Toggle (Attached to sidebar)
-                        if (settings.showSidebar)
-                          Positioned(
-                            left: sidebarWidth + 20,
-                            top: 60,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {
-                                HapticFeedback.mediumImpact();
-                                context.read<SettingsCubit>().toggleSidebar();
-                              },
-                              child: _buildChevronToggle(
-                                context,
-                                settings.showSidebar,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                  _buildComprehensiveToolbar(context, settings, orientation),
                 ],
               );
             },
@@ -217,60 +64,234 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildProblemBadge(BuildContext context, Problem problem) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
+  Widget _buildComprehensiveToolbar(BuildContext context, SettingsState settings, Orientation orientation) {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Intelligence & View Row (Upper Row)
+              _buildIntelligenceRow(context, settings),
+              const SizedBox(height: 8),
+
+              // Icon Picker Trigger (Contextual)
+              if (settings.toolMode == ToolMode.diagram)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _buildSelectedIconPreview(context, settings),
+                ),
+              
+              // Main Drawing & Styling Bar (Lower Row)
+              _buildMainIntegratedBar(context, settings),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIntelligenceRow(BuildContext context, SettingsState settings) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.1),
-            ),
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.lightbulb_outline,
-                size: 16,
-                color: _getDifficultyColor(problem.difficulty),
+              // AI Intelligence
+              _smallToggleButton(
+                context, 
+                Icons.draw_rounded, 
+                () => context.read<SettingsCubit>().toggleShapeDetection(), 
+                settings.enableShapeDetection, 
+                tooltip: "Shape Detector",
               ),
-              const SizedBox(width: 8),
-              Text(
-                problem.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  letterSpacing: -0.2,
-                ),
+              _smallToggleButton(
+                context, 
+                Icons.text_fields_rounded, 
+                () => context.read<SettingsCubit>().toggleHandwritingRecognition(), 
+                settings.enableHandwritingRecognition, 
+                tooltip: "Paint to Text (Handwriting)",
               ),
-              const SizedBox(width: 12),
-              Container(
-                width: 1,
-                height: 16,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.1),
+
+              _divider(),
+
+              // Zoom Controls
+              _smallIconButton(context, Icons.zoom_out_rounded, () => context.read<SettingsCubit>().setZoom(settings.zoomLevel - 0.2), tooltip: "Zoom Out"),
+              _smallIconButton(context, Icons.zoom_in_rounded, () => context.read<SettingsCubit>().setZoom(settings.zoomLevel + 0.2), tooltip: "Zoom In"),
+              _smallIconButton(
+                context, 
+                Icons.center_focus_strong_outlined, 
+                () => context.read<SettingsCubit>().resetTransform(), 
+                color: (settings.panOffset != Offset.zero || settings.zoomLevel != 1.0) ? Colors.blueAccent : null,
+                tooltip: "Reset View",
               ),
-              const SizedBox(width: 12),
-              Text(
-                problem.difficulty.name.toUpperCase(),
-                style: TextStyle(
-                  color: _getDifficultyColor(problem.difficulty),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
+
+              _divider(),
+
+              // Global Actions
+              _smallIconButton(context, Icons.delete_sweep_rounded, () {
+                 HapticFeedback.heavyImpact();
+                 context.read<DrawingCubit>().clear();
+              }, color: Colors.redAccent.withValues(alpha: 0.8), tooltip: "Clear All Board"),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMainIntegratedBar(BuildContext context, SettingsState settings) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(35),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(35),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 10)),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Core Tools
+              _toolbarButton(context, Icons.edit_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.pen), settings.toolMode == ToolMode.pen, tooltip: "Pen"),
+              _toolbarButton(context, Icons.pan_tool_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.hand), settings.toolMode == ToolMode.hand, tooltip: "Hand (Pan)"),
+              _toolbarButton(context, Icons.history_edu_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.connector), settings.toolMode == ToolMode.connector, tooltip: "Connector"),
+              _toolbarButton(context, Icons.category_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.diagram), settings.toolMode == ToolMode.diagram, tooltip: "Diagram Icons"),
+              _toolbarButton(context, Icons.auto_fix_high_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.eraser), settings.toolMode == ToolMode.eraser, tooltip: "Eraser"),
+              
+              _divider(),
+
+              // Quick Presets
+              _presetButton(context, Icons.edit_note, 2.0, settings.strokeWidth, "Pencil"),
+              _presetButton(context, Icons.edit, 5.0, settings.strokeWidth, "Pen"),
+              _presetButton(context, Icons.brush_rounded, 12.0, settings.strokeWidth, "Brush"),
+              _presetButton(context, Icons.format_paint_rounded, 24.0, settings.strokeWidth, "Paint"),
+
+              _divider(),
+
+              // Styling Controls
+              _buildColorButton(context, settings.strokeColor),
+              _buildWidthSlider(context, settings.strokeWidth),
+
+              _divider(),
+
+              // History
+              _toolbarButton(context, Icons.undo_rounded, () => context.read<DrawingCubit>().undo(), false, tooltip: "Undo"),
+              _toolbarButton(context, Icons.redo_rounded, () => context.read<DrawingCubit>().redo(), false, tooltip: "Redo"),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedIconPreview(BuildContext context, SettingsState settings) {
+    final iconPath = settings.selectedIconPath;
+    return GestureDetector(
+      onTap: () => _showIconPicker(context, settings),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (iconPath != null) SvgPicture.asset(iconPath, width: 24, height: 24)
+                else const Icon(Icons.search_rounded, size: 24, color: Colors.blueAccent),
+                const SizedBox(width: 10),
+                Text(
+                  iconPath?.split('/').last.split('.').first.replaceAll('-', ' ').toUpperCase() ?? "SEARCH CLOUD ICONS",
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.blueAccent, letterSpacing: 1.0),
+                ),
+                const Icon(Icons.arrow_right_rounded, color: Colors.blueAccent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showIconPicker(BuildContext context, SettingsState settings) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
+        child: IconPickerSheet(
+          selectedIconPath: settings.selectedIconPath,
+          onIconSelected: (path) {
+            context.read<SettingsCubit>().setSelectedIconPath(path);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidebar(BuildContext context, SettingsState settings, double width) {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutQuart,
+      left: settings.showSidebar ? 0 : -width,
+      top: 0,
+      bottom: 0,
+      width: width + 60,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0, top: 0, bottom: 0, width: width,
+            child: ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                    border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                  ),
+                  child: const ProblemPanel(),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: width + 10, top: 100,
+            child: GestureDetector(
+              onTap: () => context.read<SettingsCubit>().toggleSidebar(),
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+                child: Icon(settings.showSidebar ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, color: Colors.blueAccent),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -278,108 +299,26 @@ class HomePage extends StatelessWidget {
   Widget _buildTopBar(BuildContext context, Problem? selectedProblem) {
     return ClipRRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-              ),
-            ),
-          ),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4), border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
           child: SafeArea(
             bottom: false,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    BlocBuilder<SettingsCubit, SettingsState>(
-                      builder: (context, state) {
-                        return GestureDetector(
-                          onTap: () {
-                            HapticFeedback.mediumImpact();
-                            context.read<SettingsCubit>().toggleSidebar();
-                          },
-                          child: _buildChevronToggle(
-                            context,
-                            state.showSidebar,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "LOGIC",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2.5,
-                            color: Colors.blueAccent,
-                          ),
-                        ),
-                        Text(
-                          "Canvas",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w300,
-                            letterSpacing: -0.5,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                GestureDetector(
+                  onTap: () => context.read<SettingsCubit>().toggleSidebar(),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.menu_rounded, color: Colors.blueAccent),
+                  ),
                 ),
-                Row(
-                  children: [
-                    // Advanced Settings Popup
-                    PopupMenuButton<String>(
-                      icon: Icon(
-                        Icons.settings_outlined,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                      offset: const Offset(0, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          child: BlocBuilder<SettingsCubit, SettingsState>(
-                            builder: (context, state) {
-                              return Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Auto-hide Sidebar"),
-                                  Switch.adaptive(
-                                    value: state.autoHideSidebar,
-                                    onChanged: (value) {
-                                      HapticFeedback.lightImpact();
-                                      context
-                                          .read<SettingsCubit>()
-                                          .toggleAutoHideSidebar();
-                                      Navigator.pop(context);
-                                    },
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
-                    _buildThemeToggle(context),
-                  ],
-                ),
+                const SizedBox(width: 16),
+                const Text("LogicCanvas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.8)),
+                const Spacer(),
+                const Text("Premium Edition", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -388,581 +327,106 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildThemeToggle(BuildContext context) {
-    return BlocBuilder<SettingsCubit, SettingsState>(
-      builder: (context, state) {
-        final isDark = state.themeMode == ThemeMode.dark;
-        return IconButton(
-          onPressed: () {
-            HapticFeedback.mediumImpact();
-            context.read<SettingsCubit>().toggleTheme();
-          },
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Icon(
-              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              key: ValueKey(isDark),
-              color: isDark ? Colors.orangeAccent : Colors.indigoAccent,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildChevronToggle(BuildContext context, bool isExpanded) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          isExpanded ? Icons.chevron_left : Icons.chevron_right,
-          color: Colors.blueAccent,
-          size: 24,
-        ),
-      ),
-    );
-  }
-
-  Color _getDifficultyColor(Difficulty diff) {
-    switch (diff) {
-      case Difficulty.easy:
-        return Colors.green;
-      case Difficulty.medium:
-        return Colors.orange;
-      case Difficulty.hard:
-        return Colors.red;
-    }
-  }
-
-  Widget _buildRecenterButton(BuildContext context, bool canRecenter) {
-    return GestureDetector(
-      onTap: () {
-        if (canRecenter) {
-          HapticFeedback.mediumImpact();
-          context.read<SettingsCubit>().resetTransform();
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: canRecenter
-                ? Colors.blueAccent.withValues(alpha: 0.5)
-                : Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.1),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Icon(
-            Icons.center_focus_strong,
-            color: canRecenter ? Colors.blueAccent : Colors.grey,
-            size: 28,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToolbarToggle(
-    BuildContext context,
-    bool isExpanded,
-    Orientation orientation,
-  ) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        context.read<SettingsCubit>().toggleToolbar();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        width: isExpanded ? 50 : 60,
-        height: isExpanded ? 24 : 60,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(isExpanded ? 12 : 30),
-          border: Border.all(
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.1),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Center(
-          child: isExpanded
-              ? Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Colors.blueAccent.withValues(alpha: 0.8),
-                  size: 20,
-                )
-              : const Icon(
-                  Icons.construction,
-                  color: Colors.blueAccent,
-                  size: 28,
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFloatingToolbar(
-    BuildContext context,
-    SettingsState settings,
-    bool isVertical,
-  ) {
-    final children = [
-      _toolbarButton(
-        context,
-        Icons.edit,
-        () => context.read<SettingsCubit>().setToolMode(ToolMode.pen),
-        settings.toolMode == ToolMode.pen,
-      ),
-      _toolbarButton(
-        context,
-        Icons.auto_fix_normal,
-        () => context.read<SettingsCubit>().setToolMode(ToolMode.eraser),
-        settings.toolMode == ToolMode.eraser,
-      ),
-      _toolbarButton(
-        context,
-        Icons.pan_tool,
-        () => context.read<SettingsCubit>().setToolMode(ToolMode.hand),
-        settings.toolMode == ToolMode.hand,
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.zoom_in,
-        () => context.read<SettingsCubit>().setZoom(settings.zoomLevel + 0.1),
-        false,
-      ),
-      _toolbarButton(
-        context,
-        Icons.zoom_out,
-        () => context.read<SettingsCubit>().setZoom(settings.zoomLevel - 0.1),
-        false,
-      ),
-      _toolbarButton(
-        context,
-        Icons.center_focus_strong,
-        () => context.read<SettingsCubit>().resetTransform(),
-        false,
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.undo,
-        () => context.read<DrawingCubit>().undo(),
-        false,
-      ),
-      _toolbarButton(
-        context,
-        Icons.redo,
-        () => context.read<DrawingCubit>().redo(),
-        false,
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _buildBrushPresets(context, settings.strokeWidth, isVertical: isVertical),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _buildColorPickerButton(context, settings.strokeColor),
-      _buildWidthSlider(context, settings.strokeWidth, isVertical: isVertical),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.grid_4x4,
-        () => context.read<SettingsCubit>().setPattern(BackgroundPattern.grid),
-        settings.pattern == BackgroundPattern.grid,
-      ),
-      _toolbarButton(
-        context,
-        Icons.reorder,
-        () => context.read<SettingsCubit>().setPattern(BackgroundPattern.lines),
-        settings.pattern == BackgroundPattern.lines,
-      ),
-      _toolbarButton(
-        context,
-        Icons.layers_clear,
-        () => context.read<SettingsCubit>().setPattern(BackgroundPattern.none),
-        settings.pattern == BackgroundPattern.none,
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.text_fields,
-        () {
-          context.read<SettingsCubit>().toggleHandwritingRecognition();
-        },
-        settings.enableHandwritingRecognition,
-        tooltip: 'Writing to Proper Text',
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        settings.enableShapeDetection
-            ? Icons.auto_fix_high
-            : Icons.auto_fix_off,
-        () {
-          context.read<SettingsCubit>().toggleShapeDetection();
-        },
-        settings.enableShapeDetection,
-        tooltip: 'Auto Shape Detection',
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.category_outlined,
-        () => context.read<SettingsCubit>().setToolMode(ToolMode.diagram),
-        settings.toolMode == ToolMode.diagram,
-        tooltip: 'Diagram Icons',
-      ),
-      _toolbarButton(
-        context,
-        Icons.mediation_outlined,
-        () => context.read<SettingsCubit>().setToolMode(ToolMode.connector),
-        settings.toolMode == ToolMode.connector,
-        tooltip: 'Connector Tool',
-      ),
-      isVertical
-          ? const Divider(color: Colors.white24, indent: 10, endIndent: 10)
-          : const VerticalDivider(
-              color: Colors.white24,
-              indent: 10,
-              endIndent: 10,
-            ),
-      _toolbarButton(
-        context,
-        Icons.delete_outline,
-        () => context.read<DrawingCubit>().clear(),
-        false,
-        color: Colors.redAccent,
-      ),
-    ];
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.2),
-            ),
-          ),
-          child: isVertical
-              ? IntrinsicWidth(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: children,
-                    ),
-                  ),
-                )
-              : IntrinsicHeight(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: children,
-                    ),
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrushPresets(
-    BuildContext context,
-    double currentWidth, {
-    bool isVertical = false,
-  }) {
-    final children = [
-      _toolbarButton(
-        context,
-        Icons.edit_note,
-        () => context.read<SettingsCubit>().setBrushPreset(2.0),
-        currentWidth == 2.0,
-        tooltip: 'Pencil (2px)',
-      ),
-      _toolbarButton(
-        context,
-        Icons.edit,
-        () => context.read<SettingsCubit>().setBrushPreset(5.0),
-        currentWidth == 5.0,
-        tooltip: 'Pen (5px)',
-      ),
-      _toolbarButton(
-        context,
-        Icons.brush,
-        () => context.read<SettingsCubit>().setBrushPreset(12.0),
-        currentWidth == 12.0,
-        tooltip: 'Brush (12px)',
-      ),
-      _toolbarButton(
-        context,
-        Icons.format_paint,
-        () => context.read<SettingsCubit>().setBrushPreset(24.0),
-        currentWidth == 24.0,
-        tooltip: 'Painting (24px)',
-      ),
-    ];
-
-    return isVertical
-        ? Column(mainAxisSize: MainAxisSize.min, children: children)
-        : Row(mainAxisSize: MainAxisSize.min, children: children);
-  }
-
-  Widget _buildColorPickerButton(BuildContext context, Color currentColor) {
-    return IconButton(
-      icon: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: currentColor,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-      ),
-      onPressed: () {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Pick a color'),
-            content: SingleChildScrollView(
-              child: ColorPicker(
-                pickerColor: currentColor,
-                onColorChanged: (color) =>
-                    context.read<SettingsCubit>().setStrokeColor(color),
-              ),
-            ),
-            actions: [
-              TextButton(
-                child: const Text('Close'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildWidthSlider(
-    BuildContext context,
-    double currentWidth, {
-    bool isVertical = false,
-  }) {
-    return SizedBox(
-      width: isVertical ? 100 : 150,
-      child: Slider(
-        value: currentWidth,
-        min: 1,
-        max: 50,
-        onChanged: (value) =>
-            context.read<SettingsCubit>().setStrokeWidth(value),
-      ),
-    );
-  }
-
-  Widget _toolbarButton(
-    BuildContext context,
-    IconData icon,
-    VoidCallback onPressed,
-    bool active, {
-    Color? color,
-    String? tooltip,
-  }) {
-    return IconButton(
-      onPressed: () {
-        HapticFeedback.mediumImpact();
-        onPressed();
-      },
-      icon: Icon(icon),
-      tooltip: tooltip,
-      color: active
-          ? Colors.blueAccent
-          : (color ??
-                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
-      iconSize: 26,
-    );
-  }
-
-  Widget _buildAssetBar(BuildContext context, SettingsState settings) {
+  Widget _buildProblemBadge(BuildContext context, Problem problem) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
-          width: 600,
-          height: 100,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
-            ),
-          ),
-          child: DefaultTabController(
-            length: 3,
-            child: Column(
-              children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: "AWS"),
-                    Tab(text: "Azure"),
-                    Tab(text: "GCP"),
-                  ],
-                  labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  indicatorColor: Colors.blueAccent,
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _buildAssetGrid(context, "aws-icons"),
-                      _buildAssetGrid(context, "azure-icons"),
-                      _buildAssetGrid(context, "gcp-icons"),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lightbulb_rounded, size: 18, color: _getDifficultyColor(problem.difficulty)),
+              const SizedBox(width: 10),
+              Text(problem.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const SizedBox(width: 15),
+              Container(width: 1, height: 16, color: Colors.white.withValues(alpha: 0.1)),
+              const SizedBox(width: 15),
+              Text(problem.difficulty.name.toUpperCase(), style: TextStyle(color: _getDifficultyColor(problem.difficulty), fontSize: 13, fontWeight: FontWeight.w900)),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildAssetGrid(BuildContext context, String category) {
-    // This is a simplified list for initial implementation. 
-    // In a real app, we'd list the directory or have a predefined map of popular icons.
-    final List<String> popularIcons = _getPopularIcons(category);
-
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: popularIcons.length,
-      itemBuilder: (context, index) {
-        final iconPath = "assets/icons/$category/${popularIcons[index]}";
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            context.read<SettingsCubit>().setSelectedIconPath(iconPath);
-          },
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white10,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white24,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                popularIcons[index].split('-').last.split('.').first.toUpperCase(),
-                style: const TextStyle(fontSize: 8, color: Colors.white70),
-              ),
-            ),
+  Widget _buildColorButton(BuildContext context, Color currentColor) {
+    return GestureDetector(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF1E1E1E),
+            title: const Text('Brush Color'),
+            content: SingleChildScrollView(child: ColorPicker(pickerColor: currentColor, onColorChanged: (color) => context.read<SettingsCubit>().setStrokeColor(color))),
+            actions: [TextButton(child: const Text('Done'), onPressed: () => Navigator.of(context).pop())],
           ),
         );
       },
+      child: Container(
+        width: 32, height: 32, margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(color: currentColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), boxShadow: [BoxShadow(color: currentColor.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)]),
+      ),
     );
   }
 
-  List<String> _getPopularIcons(String category) {
-    if (category == "aws-icons") {
-      return ["aws-lambda.svg", "aws-ec2.svg", "aws-simple-storage-service.svg", "aws-dynamodb.svg"];
-    } else if (category == "azure-icons") {
-      return ["azure-virtual-machine.svg", "azure-function-apps.svg", "azure-cosmos-db.svg", "azure-active-directory.svg"];
-    } else {
-      return ["gcp-compute-engine.svg", "gcp-cloud-functions.svg", "gcp-cloud-storage.svg", "gcp-bigquery.svg"];
+  Widget _buildWidthSlider(BuildContext context, double currentWidth) {
+    return SizedBox(width: 80, child: Slider(value: currentWidth, min: 1, max: 20, onChanged: (value) => context.read<SettingsCubit>().setStrokeWidth(value)));
+  }
+
+  Widget _divider() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    child: Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.1)),
+  );
+
+  Widget _toolbarButton(BuildContext context, IconData icon, VoidCallback onPressed, bool active, {Color? color, String? tooltip}) {
+    return Tooltip(
+      message: tooltip ?? "",
+      child: IconButton(
+        onPressed: () { HapticFeedback.lightImpact(); onPressed(); },
+        icon: Icon(icon), color: active ? Colors.blueAccent : (color ?? Colors.white.withValues(alpha: 0.6)), iconSize: 28,
+      ),
+    );
+  }
+
+  Widget _presetButton(BuildContext context, IconData icon, double width, double currentWidth, String label) {
+    final bool active = (currentWidth - width).abs() < 0.1;
+    return Tooltip(
+      message: label,
+      child: IconButton(
+        onPressed: () { HapticFeedback.mediumImpact(); context.read<SettingsCubit>().setBrushPreset(width); },
+        icon: Icon(icon), color: active ? Colors.blueAccent : Colors.white.withValues(alpha: 0.4), iconSize: 22,
+      ),
+    );
+  }
+
+  Widget _smallIconButton(BuildContext context, IconData icon, VoidCallback onPressed, {Color? color, String? tooltip}) {
+    return Tooltip(
+      message: tooltip ?? "",
+      child: IconButton(
+        onPressed: () { HapticFeedback.lightImpact(); onPressed(); },
+        icon: Icon(icon), color: color ?? Colors.white.withValues(alpha: 0.6), iconSize: 20, constraints: const BoxConstraints(), padding: const EdgeInsets.all(8),
+      ),
+    );
+  }
+
+  Widget _smallToggleButton(BuildContext context, IconData icon, VoidCallback onPressed, bool active, {String? tooltip}) {
+    return Tooltip(
+      message: tooltip ?? "",
+      child: IconButton(
+        onPressed: () { HapticFeedback.mediumImpact(); onPressed(); },
+        icon: Icon(icon), color: active ? Colors.blueAccent : Colors.white.withValues(alpha: 0.4), iconSize: 20, constraints: const BoxConstraints(), padding: const EdgeInsets.all(8),
+      ),
+    );
+  }
+
+  Color _getDifficultyColor(Difficulty difficulty) {
+    switch (difficulty) {
+      case Difficulty.easy: return Colors.greenAccent;
+      case Difficulty.medium: return Colors.orangeAccent;
+      case Difficulty.hard: return Colors.redAccent;
     }
   }
 }

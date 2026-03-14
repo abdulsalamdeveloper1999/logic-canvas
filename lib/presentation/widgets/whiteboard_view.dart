@@ -1,7 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:logic_canvas/domain/entities/stroke.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_state.dart';
@@ -28,12 +30,38 @@ class _WhiteboardViewState extends State<WhiteboardView> {
   final ValueNotifier<Offset?> _hoverPositionNotifier = ValueNotifier<Offset?>(
     null,
   );
+  final Map<String, ui.Picture> _svgCache = {};
 
   @override
   void dispose() {
     _activeStrokeNotifier.dispose();
     _hoverPositionNotifier.dispose();
+    for (final picture in _svgCache.values) {
+      picture.dispose();
+    }
     super.dispose();
+  }
+
+  Future<void> _loadSvg(String path) async {
+    if (_svgCache.containsKey(path)) return;
+
+    try {
+      final loader = SvgAssetLoader(path);
+      // Load with a consistent target size
+      final pictureInfo = await vg.loadPicture(
+        loader,
+        null, // No override color
+        onError: (e, stack) => debugPrint('SVG Error: $e'),
+      );
+
+      if (mounted) {
+        setState(() {
+          _svgCache[path] = pictureInfo.picture;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading SVG $path: $e');
+    }
   }
 
   @override
@@ -162,99 +190,111 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               _pendingPoint = null;
             }
           },
-          child: Stack(
-            children: [
-              // 1. Static Layer: Infinite Background Grid
-              BlocBuilder<SettingsCubit, SettingsState>(
-                buildWhen: (prev, curr) =>
-                    prev.pattern != curr.pattern ||
-                    prev.panOffset != curr.panOffset ||
-                    prev.zoomLevel != curr.zoomLevel ||
-                    prev.themeMode != curr.themeMode,
-                builder: (context, settings) {
-                  return RepaintBoundary(
-                    child: CustomPaint(
-                      painter: GridPainter(
-                        pattern: settings.pattern,
-                        panOffset: settings.panOffset,
-                        zoomLevel: settings.zoomLevel,
-                        themeMode: settings.themeMode,
-                      ),
-                      size: Size.infinite,
-                    ),
-                  );
-                },
-              ),
-
-              // 2. History Layer: Completed Strokes
-              BlocBuilder<SettingsCubit, SettingsState>(
-                buildWhen: (prev, curr) =>
-                    prev.panOffset != curr.panOffset ||
-                    prev.zoomLevel != curr.zoomLevel ||
-                    prev.themeMode != curr.themeMode,
-                builder: (context, settings) {
-                  return BlocBuilder<DrawingCubit, DrawingState>(
-                    buildWhen: (prev, curr) => prev.strokes != curr.strokes,
-                    builder: (context, drawingState) {
-                      return RepaintBoundary(
-                        child: SizedBox.expand(
-                          child: CustomPaint(
-                            painter: WhiteboardPainter(
-                              strokes: drawingState.strokes,
-                              pattern: BackgroundPattern.none,
-                              themeMode: settings.themeMode,
-                              panOffset: settings.panOffset,
-                              zoomLevel: settings.zoomLevel,
-                            ),
-                            size: Size.infinite,
-                          ),
+          child: BlocListener<DrawingCubit, DrawingState>(
+            listenWhen: (prev, curr) => prev.strokes != curr.strokes,
+            listener: (context, state) {
+              // Load SVGs for any new icon strokes
+              for (final stroke in state.strokes) {
+                if (stroke.type == StrokeType.icon && stroke.iconPath != null) {
+                  _loadSvg(stroke.iconPath!);
+                }
+              }
+            },
+            child: Stack(
+              children: [
+                // 1. Static Layer: Infinite Background Grid
+                BlocBuilder<SettingsCubit, SettingsState>(
+                  buildWhen: (prev, curr) =>
+                      prev.pattern != curr.pattern ||
+                      prev.panOffset != curr.panOffset ||
+                      prev.zoomLevel != curr.zoomLevel ||
+                      prev.themeMode != curr.themeMode,
+                  builder: (context, settings) {
+                    return RepaintBoundary(
+                      child: CustomPaint(
+                        painter: GridPainter(
+                          pattern: settings.pattern,
+                          panOffset: settings.panOffset,
+                          zoomLevel: settings.zoomLevel,
+                          themeMode: settings.themeMode,
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
+                        size: Size.infinite,
+                      ),
+                    );
+                  },
+                ),
 
-              // 3. Dynamic Layer: Active Stroke & Hover Cursor
-              BlocBuilder<SettingsCubit, SettingsState>(
-                buildWhen: (prev, curr) =>
-                    prev.panOffset != curr.panOffset ||
-                    prev.zoomLevel != curr.zoomLevel ||
-                    prev.strokeWidth != curr.strokeWidth ||
-                    prev.strokeColor != curr.strokeColor ||
-                    prev.isEraser != curr.isEraser ||
-                    prev.themeMode != curr.themeMode,
-                builder: (context, settings) {
-                  return ValueListenableBuilder<Offset?>(
-                    valueListenable: _hoverPositionNotifier,
-                    builder: (context, hoverPos, _) {
-                      return ValueListenableBuilder<Stroke?>(
-                        valueListenable: _activeStrokeNotifier,
-                        builder: (context, activeStroke, _) {
-                          return SizedBox.expand(
+                // 2. History Layer: Completed Strokes
+                BlocBuilder<SettingsCubit, SettingsState>(
+                  buildWhen: (prev, curr) =>
+                      prev.panOffset != curr.panOffset ||
+                      prev.zoomLevel != curr.zoomLevel ||
+                      prev.themeMode != curr.themeMode,
+                  builder: (context, settings) {
+                    return BlocBuilder<DrawingCubit, DrawingState>(
+                      buildWhen: (prev, curr) => prev.strokes != curr.strokes,
+                      builder: (context, drawingState) {
+                        return RepaintBoundary(
+                          child: SizedBox.expand(
                             child: CustomPaint(
                               painter: WhiteboardPainter(
-                                strokes: const [],
-                                activeStroke: activeStroke,
+                                strokes: drawingState.strokes,
                                 pattern: BackgroundPattern.none,
                                 themeMode: settings.themeMode,
-                                hoverPosition: hoverPos,
-                                brushSize: settings.strokeWidth,
-                                brushColor: settings.strokeColor,
-                                isEraser: settings.isEraser,
                                 panOffset: settings.panOffset,
                                 zoomLevel: settings.zoomLevel,
+                                svgPictures: _svgCache,
                               ),
                               size: Size.infinite,
                             ),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+
+                // 3. Dynamic Layer: Active Stroke & Hover Cursor
+                BlocBuilder<SettingsCubit, SettingsState>(
+                  buildWhen: (prev, curr) =>
+                      prev.panOffset != curr.panOffset ||
+                      prev.zoomLevel != curr.zoomLevel ||
+                      prev.strokeWidth != curr.strokeWidth ||
+                      prev.strokeColor != curr.strokeColor ||
+                      prev.isEraser != curr.isEraser ||
+                      prev.themeMode != curr.themeMode,
+                  builder: (context, settings) {
+                    return ValueListenableBuilder<Offset?>(
+                      valueListenable: _hoverPositionNotifier,
+                      builder: (context, hoverPos, _) {
+                        return ValueListenableBuilder<Stroke?>(
+                          valueListenable: _activeStrokeNotifier,
+                          builder: (context, activeStroke, _) {
+                            return SizedBox.expand(
+                              child: CustomPaint(
+                                painter: WhiteboardPainter(
+                                  strokes: const [],
+                                  activeStroke: activeStroke,
+                                  pattern: BackgroundPattern.none,
+                                  themeMode: settings.themeMode,
+                                  hoverPosition: hoverPos,
+                                  brushSize: settings.strokeWidth,
+                                  brushColor: settings.strokeColor,
+                                  isEraser: settings.isEraser,
+                                  panOffset: settings.panOffset,
+                                  zoomLevel: settings.zoomLevel,
+                                ),
+                                size: Size.infinite,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -284,6 +324,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       enableShapeDetection,
       enableHandwriting: enableHandwriting,
     );
+
+    if (finalStroke.type == StrokeType.icon && finalStroke.iconPath != null) {
+      _loadSvg(finalStroke.iconPath!);
+    }
   }
 
   void _handleDrawingStart(
@@ -300,7 +344,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
         (localPosition - settings.panOffset) / settings.zoomLevel;
 
     // Handle Diagram Mode (One-tap icon placement)
-    if (settings.toolMode == ToolMode.diagram && settings.selectedIconPath != null) {
+    if (settings.toolMode == ToolMode.diagram &&
+        settings.selectedIconPath != null) {
       final iconStroke = Stroke(
         points: [canvasPoint],
         color: settings.strokeColor,
@@ -309,6 +354,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
         iconPath: settings.selectedIconPath,
       );
       drawingCubit.addStroke(iconStroke);
+      _loadSvg(settings.selectedIconPath!);
       return; // No need to start a 'drawing' session
     }
 
@@ -318,7 +364,9 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       color: settings.isEraser ? Colors.transparent : settings.strokeColor,
       strokeWidth: settings.strokeWidth,
       isEraser: settings.isEraser,
-      type: settings.toolMode == ToolMode.connector ? StrokeType.connector : StrokeType.pen,
+      type: settings.toolMode == ToolMode.connector
+          ? StrokeType.connector
+          : StrokeType.pen,
     );
 
     debugPrint(
