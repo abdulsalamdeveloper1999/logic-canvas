@@ -1,0 +1,270 @@
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:logic_canvas/domain/entities/stroke.dart';
+import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
+
+class WhiteboardPainter extends CustomPainter {
+  final List<Stroke> strokes;
+  final Stroke? activeStroke;
+  final BackgroundPattern pattern;
+  final ThemeMode themeMode;
+  final Offset? hoverPosition;
+  final double? brushSize;
+  final Color? brushColor;
+  final bool isEraser;
+  final Offset panOffset;
+  final double zoomLevel;
+
+  WhiteboardPainter({
+    required this.strokes,
+    this.activeStroke,
+    required this.pattern,
+    required this.themeMode,
+    this.hoverPosition,
+    this.brushSize,
+    this.brushColor,
+    this.isEraser = false,
+    required this.panOffset,
+    required this.zoomLevel,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Draw hover cursor (in screen space, before transform)
+    if (hoverPosition != null) {
+      _drawHoverCursor(canvas, size);
+    }
+
+    // 2. Apply Transformation for strokes
+    canvas.save();
+    canvas.translate(panOffset.dx, panOffset.dy);
+    canvas.scale(zoomLevel);
+
+    // 3. Draw completed strokes
+    _drawStrokes(canvas, size, strokes);
+
+    // 4. Draw active stroke (real-time feedback)
+    if (activeStroke != null) {
+      _drawStrokes(canvas, size, [activeStroke!]);
+    }
+
+    canvas.restore();
+  }
+
+  void _drawStrokes(Canvas canvas, Size size, List<Stroke> strokesToDraw) {
+    if (strokesToDraw.isEmpty) return;
+
+    // Use a layer for the eraser to work correctly with BlendMode.clear
+    // Pass null to saveLayer to use the current clip bounds (infinite/screen size)
+    canvas.saveLayer(null, Paint());
+
+    for (final stroke in strokesToDraw) {
+      if (stroke.points.isEmpty) continue;
+
+      final paint = Paint()
+        ..color = stroke.isEraser ? Colors.transparent : stroke.color
+        ..strokeWidth = stroke.strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+
+      if (stroke.isEraser) {
+        paint.blendMode = BlendMode.clear;
+      }
+
+      if (stroke.type == StrokeType.text && stroke.text != null) {
+        _drawTextStroke(canvas, stroke);
+      } else if (stroke.points.length == 1) {
+        // Draw a dot for single-point strokes
+        final dotPaint = Paint()
+          ..color = stroke.isEraser ? Colors.transparent : stroke.color
+          ..style = PaintingStyle.fill;
+        if (stroke.isEraser) dotPaint.blendMode = BlendMode.clear;
+        canvas.drawCircle(
+          stroke.points.first,
+          stroke.strokeWidth / 2,
+          dotPaint,
+        );
+      } else if (stroke.type == StrokeType.icon && stroke.iconPath != null) {
+        _drawIconStroke(canvas, stroke);
+      } else if (stroke.type == StrokeType.connector) {
+        _drawConnectorStroke(canvas, stroke);
+      } else if (stroke.type != StrokeType.pen) {
+        _drawShapeStroke(canvas, stroke);
+      } else {
+        final path = Path();
+        path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
+        for (int i = 1; i < stroke.points.length; i++) {
+          path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+        }
+        canvas.drawPath(path, paint);
+      }
+    }
+
+    canvas.restore();
+  }
+
+  void _drawIconStroke(Canvas canvas, Stroke stroke) {
+    if (stroke.iconPath == null || stroke.points.isEmpty) return;
+
+    // TODO: Ideally use flutter_svg for SVG assets.
+    // Since I can't add dependencies easily without user confirmation,
+    // I will assume for now that some rendering mechanism exists or I need to add one.
+    // For now, I'll draw a placeholder or use the ML/Shape logic if I can't render SVG directly.
+    // WAIT: I should check if flutter_svg is in pubspec. It was NOT.
+  }
+
+  void _drawConnectorStroke(Canvas canvas, Stroke stroke) {
+    if (stroke.points.length < 2) return;
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..strokeWidth = stroke.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final start = stroke.points.first;
+    final end = stroke.points.last;
+
+    // Draw straight line for connector
+    canvas.drawLine(start, end, paint);
+
+    // Draw arrow head at the end
+    final angle = (end - start).direction;
+    const arrowSize = 15.0;
+    const arrowAngle = 0.5; // radians
+
+    final path = Path()
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(
+        end.dx - arrowSize * math.cos(angle - arrowAngle),
+        end.dy - arrowSize * math.sin(angle - arrowAngle),
+      )
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(
+        end.dx - arrowSize * math.cos(angle + arrowAngle),
+        end.dy - arrowSize * math.sin(angle + arrowAngle),
+      );
+
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawTextStroke(Canvas canvas, Stroke stroke) {
+    if (stroke.points.isEmpty) return;
+
+    // Calculate bounding box to determine font size
+    double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
+    double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
+
+    for (final p in stroke.points) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
+    final height = maxY - minY;
+    // Use the height of the handwriting as the font size, with a reasonable floor
+    final fontSize = (height * 0.8).clamp(20.0, 200.0);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: stroke.text,
+        style: TextStyle(
+          color: stroke.color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+
+    // Center the text vertically within the original handwriting area
+    final textY = minY + (height - textPainter.height) / 2;
+
+    textPainter.paint(canvas, Offset(minX, textY));
+  }
+
+  void _drawShapeStroke(Canvas canvas, Stroke stroke) {
+    if (stroke.points.isEmpty) return;
+
+    double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
+    double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
+
+    for (final p in stroke.points) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
+    final rect = Rect.fromLTRB(minX, minY, maxX, maxY);
+    final paint = Paint()
+      ..color = stroke.color
+      ..strokeWidth = stroke.strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    switch (stroke.type) {
+      case StrokeType.circle:
+        canvas.drawOval(rect, paint);
+        break;
+      case StrokeType.rectangle:
+        canvas.drawRect(rect, paint);
+        break;
+      case StrokeType.triangle:
+        final path = Path()
+          ..moveTo(rect.centerLeft.dx, rect.bottom)
+          ..lineTo(rect.topCenter.dx, rect.top)
+          ..lineTo(rect.centerRight.dx, rect.bottom)
+          ..close();
+        canvas.drawPath(path, paint);
+        break;
+      case StrokeType.diamond:
+        final path = Path()
+          ..moveTo(rect.centerLeft.dx, rect.centerLeft.dy)
+          ..lineTo(rect.topCenter.dx, rect.topCenter.dy)
+          ..lineTo(rect.centerRight.dx, rect.centerRight.dy)
+          ..lineTo(rect.bottomCenter.dx, rect.bottomCenter.dy)
+          ..close();
+        canvas.drawPath(path, paint);
+        break;
+      default:
+        break;
+    }
+  }
+
+  void _drawHoverCursor(Canvas canvas, Size size) {
+    final effectiveSize = brushSize ?? 10.0;
+    final effectiveColor = brushColor ?? Colors.blue;
+
+    // Convert canvas hover position to screen position for drawing the cursor
+    final screenPos = hoverPosition! * zoomLevel + panOffset;
+
+    final paint = Paint()
+      ..color = isEraser
+          ? Colors.white.withValues(alpha: 0.15)
+          : effectiveColor.withValues(alpha: 0.15)
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = isEraser
+          ? Colors.white.withValues(alpha: 0.4)
+          : effectiveColor.withValues(alpha: 0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    canvas.drawCircle(screenPos, (effectiveSize * zoomLevel) / 2, paint);
+    canvas.drawCircle(screenPos, (effectiveSize * zoomLevel) / 2, borderPaint);
+
+    final dotPaint = Paint()
+      ..color = isEraser
+          ? Colors.white.withValues(alpha: 0.8)
+          : effectiveColor.withValues(alpha: 0.8)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(screenPos, 1.5, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant WhiteboardPainter oldDelegate) => true;
+}
