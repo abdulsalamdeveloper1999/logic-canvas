@@ -7,6 +7,7 @@ import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
 import 'package:logic_canvas/presentation/cubits/progress/progress_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
 import 'package:logic_canvas/presentation/pages/home/home_page.dart';
 
 void main() async {
@@ -35,6 +36,9 @@ void main() async {
     
     debugPrint('📦 Hive: Opening drawing box...');
     await Hive.openBox('drawing');
+
+    debugPrint('📦 Hive: Opening entitlements box...');
+    await Hive.openBox('entitlements');
     
     debugPrint('📦 Hive: Boxes opened successfully');
 
@@ -65,6 +69,7 @@ class LogicCanvasApp extends StatelessWidget {
         BlocProvider(create: (_) => getIt<SettingsCubit>()),
         BlocProvider(create: (_) => getIt<ProgressCubit>()),
         BlocProvider(create: (_) => getIt<SelectionCubit>()),
+        BlocProvider(create: (_) => EntitlementsCubit()),
       ],
       child: BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, state) {

@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'package:logic_canvas/core/free_plan.dart';
 
 class IconPickerSheet extends StatefulWidget {
+  final bool isPro;
   final String? selectedIconPath;
   final ValueChanged<String> onIconSelected;
 
   const IconPickerSheet({
     super.key,
+    required this.isPro,
     this.selectedIconPath,
     required this.onIconSelected,
   });
@@ -45,7 +48,7 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: widget.isPro ? 4 : 1, vsync: this);
   }
 
   @override
@@ -56,9 +59,14 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
   }
 
   List<String> _getFilteredIcons(String category) {
-    List<String> baseList = category == 'all' 
-        ? _allIcons.values.expand((e) => e).toList() 
-        : _allIcons[category] ?? [];
+    List<String> baseList;
+    if (category == 'basic') {
+      baseList = FreePlan.basicIconFileNames;
+    } else if (category == 'all') {
+      baseList = _allIcons.values.expand((e) => e).toList();
+    } else {
+      baseList = _allIcons[category] ?? [];
+    }
 
     if (_searchQuery.isEmpty) return baseList;
     
@@ -74,10 +82,6 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
     return Material(
       color: Colors.transparent,
       child: Container(
-        constraints: BoxConstraints(
-          maxWidth: 600,
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(30),
@@ -129,7 +133,9 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
                     onChanged: (val) => setState(() => _searchQuery = val),
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: "Search 1,200+ icons...",
+                      hintText: widget.isPro
+                          ? "Search 1,200+ icons..."
+                          : "Search basic icons (Pro unlocks full library)...",
                       prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Colors.blueAccent),
                       filled: true,
                       fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05),
@@ -147,12 +153,16 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
                 // Tabs
                 TabBar(
                   controller: _tabController,
-                  tabs: const [
-                    Tab(text: "ALL"),
-                    Tab(text: "AWS"),
-                    Tab(text: "AZURE"),
-                    Tab(text: "GCP"),
-                  ],
+                  tabs: widget.isPro
+                      ? const [
+                          Tab(text: "ALL"),
+                          Tab(text: "AWS"),
+                          Tab(text: "AZURE"),
+                          Tab(text: "GCP"),
+                        ]
+                      : const [
+                          Tab(text: "BASIC"),
+                        ],
                   labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   labelColor: Colors.blueAccent,
                   unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
@@ -165,12 +175,16 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
-                    children: [
-                      _buildGrid("all"),
-                      _buildGrid("aws-icons"),
-                      _buildGrid("azure-icons"),
-                      _buildGrid("gcp-icons"),
-                    ],
+                    children: widget.isPro
+                        ? [
+                            _buildGrid("all"),
+                            _buildGrid("aws-icons"),
+                            _buildGrid("azure-icons"),
+                            _buildGrid("gcp-icons"),
+                          ]
+                        : [
+                            _buildGrid("basic"),
+                          ],
                   ),
                 ),
               ],
@@ -204,7 +218,7 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
     return GridView.builder(
       padding: const EdgeInsets.all(20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5, // Increased to 5 columns for 1.2x size reduction
+        crossAxisCount: 5,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
         childAspectRatio: 0.85,
@@ -213,7 +227,7 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
       itemBuilder: (context, index) {
         final iconName = icons[index];
         String actualCategory = category;
-        if (category == 'all') {
+        if (category == 'all' || category == 'basic') {
           if (iconName.startsWith('aws-')) {
             actualCategory = 'aws-icons';
           } else if (iconName.startsWith('azure-')) {
@@ -247,10 +261,10 @@ class _IconPickerSheetState extends State<IconPickerSheet> with SingleTickerProv
               children: [
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(10), // Reduced from 12
-                    child: SvgPicture.asset(
-                      path,
-                      fit: BoxFit.contain,
+                    padding: const EdgeInsets.all(8),
+                    child: Transform.scale(
+                      scale: 1 / 1.2, // reduce icon size by ~1.2x
+                      child: SvgPicture.asset(path, fit: BoxFit.contain),
                     ),
                   ),
                 ),

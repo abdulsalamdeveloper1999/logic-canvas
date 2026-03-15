@@ -19,6 +19,9 @@ class SettingsState with _$SettingsState {
     @Default(true) bool showToolbar,
     @Default(false) bool enableShapeDetection,
     @Default(false) bool enableHandwritingRecognition,
+    // Ephemeral counter used to trigger "drop selected icon onto board" events.
+    // Intentionally not persisted in Hive.
+    @Default(0) int iconSelectionNonce,
     String? selectedIconPath,
     Offset? hoverPosition,
   }) = _SettingsState;
@@ -44,7 +47,8 @@ class SettingsState with _$SettingsState {
         orElse: () => ThemeMode.dark,
       ),
       strokeColor: Color(json['strokeColor'] as int? ?? Colors.white.toARGB32()),
-      strokeWidth: (json['strokeWidth'] as num? ?? 3.0).toDouble(),
+      // Keep in sync with the UI slider range to avoid runtime assertions.
+      strokeWidth: (json['strokeWidth'] as num? ?? 3.0).toDouble().clamp(1.0, 50.0),
       isEraser: json['isEraser'] as bool? ?? false,
       pattern: BackgroundPattern.values.firstWhere(
         (e) => e.name == (json['pattern'] as String? ?? 'grid'),
@@ -65,6 +69,7 @@ class SettingsState with _$SettingsState {
       enableShapeDetection: json['enableShapeDetection'] as bool? ?? false,
       enableHandwritingRecognition:
           json['enableHandwritingRecognition'] as bool? ?? false,
+      iconSelectionNonce: 0,
       selectedIconPath: json['selectedIconPath'] as String?,
     );
   }

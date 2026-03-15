@@ -29,7 +29,10 @@ mixin _$SettingsState {
   bool get autoHideSidebar => throw _privateConstructorUsedError;
   bool get showToolbar => throw _privateConstructorUsedError;
   bool get enableShapeDetection => throw _privateConstructorUsedError;
-  bool get enableHandwritingRecognition => throw _privateConstructorUsedError;
+  bool get enableHandwritingRecognition =>
+      throw _privateConstructorUsedError; // Ephemeral counter used to trigger "drop selected icon onto board" events.
+  // Intentionally not persisted in Hive.
+  int get iconSelectionNonce => throw _privateConstructorUsedError;
   String? get selectedIconPath => throw _privateConstructorUsedError;
   Offset? get hoverPosition => throw _privateConstructorUsedError;
 
@@ -61,6 +64,7 @@ abstract class $SettingsStateCopyWith<$Res> {
     bool showToolbar,
     bool enableShapeDetection,
     bool enableHandwritingRecognition,
+    int iconSelectionNonce,
     String? selectedIconPath,
     Offset? hoverPosition,
   });
@@ -94,6 +98,7 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
     Object? showToolbar = null,
     Object? enableShapeDetection = null,
     Object? enableHandwritingRecognition = null,
+    Object? iconSelectionNonce = null,
     Object? selectedIconPath = freezed,
     Object? hoverPosition = freezed,
   }) {
@@ -151,6 +156,10 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
                 ? _value.enableHandwritingRecognition
                 : enableHandwritingRecognition // ignore: cast_nullable_to_non_nullable
                       as bool,
+            iconSelectionNonce: null == iconSelectionNonce
+                ? _value.iconSelectionNonce
+                : iconSelectionNonce // ignore: cast_nullable_to_non_nullable
+                      as int,
             selectedIconPath: freezed == selectedIconPath
                 ? _value.selectedIconPath
                 : selectedIconPath // ignore: cast_nullable_to_non_nullable
@@ -188,6 +197,7 @@ abstract class _$$SettingsStateImplCopyWith<$Res>
     bool showToolbar,
     bool enableShapeDetection,
     bool enableHandwritingRecognition,
+    int iconSelectionNonce,
     String? selectedIconPath,
     Offset? hoverPosition,
   });
@@ -220,6 +230,7 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
     Object? showToolbar = null,
     Object? enableShapeDetection = null,
     Object? enableHandwritingRecognition = null,
+    Object? iconSelectionNonce = null,
     Object? selectedIconPath = freezed,
     Object? hoverPosition = freezed,
   }) {
@@ -277,6 +288,10 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
             ? _value.enableHandwritingRecognition
             : enableHandwritingRecognition // ignore: cast_nullable_to_non_nullable
                   as bool,
+        iconSelectionNonce: null == iconSelectionNonce
+            ? _value.iconSelectionNonce
+            : iconSelectionNonce // ignore: cast_nullable_to_non_nullable
+                  as int,
         selectedIconPath: freezed == selectedIconPath
             ? _value.selectedIconPath
             : selectedIconPath // ignore: cast_nullable_to_non_nullable
@@ -307,6 +322,7 @@ class _$SettingsStateImpl implements _SettingsState {
     this.showToolbar = true,
     this.enableShapeDetection = false,
     this.enableHandwritingRecognition = false,
+    this.iconSelectionNonce = 0,
     this.selectedIconPath,
     this.hoverPosition,
   });
@@ -344,6 +360,11 @@ class _$SettingsStateImpl implements _SettingsState {
   @override
   @JsonKey()
   final bool enableHandwritingRecognition;
+  // Ephemeral counter used to trigger "drop selected icon onto board" events.
+  // Intentionally not persisted in Hive.
+  @override
+  @JsonKey()
+  final int iconSelectionNonce;
   @override
   final String? selectedIconPath;
   @override
@@ -351,7 +372,7 @@ class _$SettingsStateImpl implements _SettingsState {
 
   @override
   String toString() {
-    return 'SettingsState(themeMode: $themeMode, strokeColor: $strokeColor, strokeWidth: $strokeWidth, isEraser: $isEraser, pattern: $pattern, showSidebar: $showSidebar, toolMode: $toolMode, zoomLevel: $zoomLevel, panOffset: $panOffset, autoHideSidebar: $autoHideSidebar, showToolbar: $showToolbar, enableShapeDetection: $enableShapeDetection, enableHandwritingRecognition: $enableHandwritingRecognition, selectedIconPath: $selectedIconPath, hoverPosition: $hoverPosition)';
+    return 'SettingsState(themeMode: $themeMode, strokeColor: $strokeColor, strokeWidth: $strokeWidth, isEraser: $isEraser, pattern: $pattern, showSidebar: $showSidebar, toolMode: $toolMode, zoomLevel: $zoomLevel, panOffset: $panOffset, autoHideSidebar: $autoHideSidebar, showToolbar: $showToolbar, enableShapeDetection: $enableShapeDetection, enableHandwritingRecognition: $enableHandwritingRecognition, iconSelectionNonce: $iconSelectionNonce, selectedIconPath: $selectedIconPath, hoverPosition: $hoverPosition)';
   }
 
   @override
@@ -388,6 +409,8 @@ class _$SettingsStateImpl implements _SettingsState {
                 ) ||
                 other.enableHandwritingRecognition ==
                     enableHandwritingRecognition) &&
+            (identical(other.iconSelectionNonce, iconSelectionNonce) ||
+                other.iconSelectionNonce == iconSelectionNonce) &&
             (identical(other.selectedIconPath, selectedIconPath) ||
                 other.selectedIconPath == selectedIconPath) &&
             (identical(other.hoverPosition, hoverPosition) ||
@@ -410,6 +433,7 @@ class _$SettingsStateImpl implements _SettingsState {
     showToolbar,
     enableShapeDetection,
     enableHandwritingRecognition,
+    iconSelectionNonce,
     selectedIconPath,
     hoverPosition,
   );
@@ -438,6 +462,7 @@ abstract class _SettingsState implements SettingsState {
     final bool showToolbar,
     final bool enableShapeDetection,
     final bool enableHandwritingRecognition,
+    final int iconSelectionNonce,
     final String? selectedIconPath,
     final Offset? hoverPosition,
   }) = _$SettingsStateImpl;
@@ -467,7 +492,10 @@ abstract class _SettingsState implements SettingsState {
   @override
   bool get enableShapeDetection;
   @override
-  bool get enableHandwritingRecognition;
+  bool get enableHandwritingRecognition; // Ephemeral counter used to trigger "drop selected icon onto board" events.
+  // Intentionally not persisted in Hive.
+  @override
+  int get iconSelectionNonce;
   @override
   String? get selectedIconPath;
   @override

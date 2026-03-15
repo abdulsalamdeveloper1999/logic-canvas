@@ -10,6 +10,8 @@ import 'settings_state.dart';
 class SettingsCubit extends Cubit<SettingsState> {
   static const String _boxName = 'settings';
   static const String _settingsKey = 'user_settings';
+  static const double _minStrokeWidth = 1.0;
+  static const double _maxStrokeWidth = 50.0;
   final HandwritingRecognitionService _handwritingService;
   final MLShapeService _mlShapeService;
 
@@ -72,7 +74,7 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setStrokeWidth(double width) {
-    emit(state.copyWith(strokeWidth: width));
+    emit(state.copyWith(strokeWidth: width.clamp(_minStrokeWidth, _maxStrokeWidth)));
     _saveSettings();
   }
 
@@ -98,6 +100,23 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   void updatePan(Offset delta) {
     emit(state.copyWith(panOffset: state.panOffset + delta));
+  }
+
+  void setPanOffset(Offset panOffset) {
+    emit(state.copyWith(panOffset: panOffset));
+  }
+
+  void setTransformTransient({required double zoomLevel, required Offset panOffset}) {
+    emit(
+      state.copyWith(
+        zoomLevel: zoomLevel.clamp(0.1, 5.0),
+        panOffset: panOffset,
+      ),
+    );
+  }
+
+  Future<void> persistTransform() async {
+    await _saveSettings();
   }
 
   void resetTransform() {
@@ -131,11 +150,12 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setBrushPreset(double width) {
     emit(
       state.copyWith(
-        strokeWidth: width,
+        strokeWidth: width.clamp(_minStrokeWidth, _maxStrokeWidth),
         toolMode: ToolMode.pen,
         isEraser: false,
       ),
     );
+    _saveSettings();
   }
 
   void setHoverPosition(Offset? position) {
@@ -175,7 +195,13 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setSelectedIconPath(String? path) {
-    emit(state.copyWith(selectedIconPath: path, toolMode: ToolMode.diagram));
+    emit(
+      state.copyWith(
+        selectedIconPath: path,
+        toolMode: ToolMode.diagram,
+        iconSelectionNonce: state.iconSelectionNonce + 1,
+      ),
+    );
     _saveSettings();
   }
 }

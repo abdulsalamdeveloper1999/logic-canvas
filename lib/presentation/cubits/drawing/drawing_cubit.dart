@@ -66,6 +66,22 @@ class DrawingCubit extends Cubit<DrawingState> {
     _saveStrokes();
   }
 
+  void updateStrokeAt(int index, Stroke stroke) {
+    if (index < 0 || index >= state.strokes.length) return;
+    final updatedStrokes = List<Stroke>.from(state.strokes);
+    updatedStrokes[index] = stroke;
+    emit(state.copyWith(strokes: updatedStrokes, redoStack: []));
+  }
+
+  void removeStrokeAt(int index) {
+    if (index < 0 || index >= state.strokes.length) return;
+    final updatedStrokes = List<Stroke>.from(state.strokes)..removeAt(index);
+    emit(state.copyWith(strokes: updatedStrokes, redoStack: []));
+    _saveStrokes();
+  }
+
+  Future<void> persistBoard() => _saveStrokes();
+
   void startStroke() {
     if (state.isDrawing) return;
 

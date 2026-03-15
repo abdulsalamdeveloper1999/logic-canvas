@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:logic_canvas/domain/entities/stroke.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
 
@@ -15,7 +16,7 @@ class WhiteboardPainter extends CustomPainter {
   final bool isEraser;
   final Offset panOffset;
   final double zoomLevel;
-  final Map<String, ui.Picture>? svgPictures;
+  final Map<String, PictureInfo>? svgPictures;
 
   WhiteboardPainter({
     required this.strokes,
@@ -33,33 +34,29 @@ class WhiteboardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Draw hover cursor (in screen space, before transform)
-    if (hoverPosition != null) {
-      _drawHoverCursor(canvas, size);
-    }
-
-    // 2. Apply Transformation for strokes
+    // 1. Apply Transformation for strokes
     canvas.save();
     canvas.translate(panOffset.dx, panOffset.dy);
     canvas.scale(zoomLevel);
 
-    // 3. Draw completed strokes
+    // 2. Draw strokes + active stroke in ONE layer so eraser clears in real time.
+    canvas.saveLayer(null, Paint());
     _drawStrokes(canvas, size, strokes);
-
-    // 4. Draw active stroke (real-time feedback)
     if (activeStroke != null) {
       _drawStrokes(canvas, size, [activeStroke!]);
     }
+    canvas.restore();
 
     canvas.restore();
+
+    // 4. Draw hover cursor (in screen space, on top)
+    if (hoverPosition != null) {
+      _drawHoverCursor(canvas, size);
+    }
   }
 
   void _drawStrokes(Canvas canvas, Size size, List<Stroke> strokesToDraw) {
     if (strokesToDraw.isEmpty) return;
-
-    // Use a layer for the eraser to work correctly with BlendMode.clear
-    // Pass null to saveLayer to use the current clip bounds (infinite/screen size)
-    canvas.saveLayer(null, Paint());
 
     for (final stroke in strokesToDraw) {
       if (stroke.points.isEmpty) continue;
@@ -77,6 +74,10 @@ class WhiteboardPainter extends CustomPainter {
 
       if (stroke.type == StrokeType.text && stroke.text != null) {
         _drawTextStroke(canvas, stroke);
+      } else if (stroke.type == StrokeType.icon && stroke.iconPath != null) {
+        // Icon strokes are single-point "stamps", so handle them before the
+        // generic single-point dot drawing.
+        _drawIconStroke(canvas, stroke);
       } else if (stroke.points.length == 1) {
         // Draw a dot for single-point strokes
         final dotPaint = Paint()
@@ -88,8 +89,6 @@ class WhiteboardPainter extends CustomPainter {
           stroke.strokeWidth / 2,
           dotPaint,
         );
-      } else if (stroke.type == StrokeType.icon && stroke.iconPath != null) {
-        _drawIconStroke(canvas, stroke);
       } else if (stroke.type == StrokeType.connector) {
         _drawConnectorStroke(canvas, stroke);
       } else if (stroke.type != StrokeType.pen) {
@@ -103,8 +102,6 @@ class WhiteboardPainter extends CustomPainter {
         canvas.drawPath(path, paint);
       }
     }
-
-    canvas.restore();
   }
 
   void _drawIconStroke(Canvas canvas, Stroke stroke) {
@@ -115,10 +112,19 @@ class WhiteboardPainter extends CustomPainter {
     final rect = Rect.fromCenter(center: center, width: size, height: size);
 
     if (svgPictures != null && svgPictures!.containsKey(stroke.iconPath!)) {
-      final picture = svgPictures![stroke.iconPath!]!;
+      final info = svgPictures![stroke.iconPath!]!;
+      final picture = info.picture;
+      final pictureSize = info.size;
+      if (pictureSize.isEmpty) return;
+
+      final scale = math.min(
+        rect.width / pictureSize.width,
+        rect.height / pictureSize.height,
+      );
       canvas.save();
-      canvas.translate(rect.left, rect.top);
-      
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.scale(scale, scale);
+      canvas.translate(-pictureSize.width / 2, -pictureSize.height / 2);
       canvas.drawPicture(picture);
       canvas.restore();
     } else {
@@ -265,16 +271,16 @@ class WhiteboardPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = isEraser
-          ? Colors.white.withValues(alpha: 0.15)
-          : effectiveColor.withValues(alpha: 0.15)
+          ? Colors.white.withValues(alpha: 0.22)
+          : effectiveColor.withValues(alpha: 0.22)
       ..style = PaintingStyle.fill;
 
     final borderPaint = Paint()
       ..color = isEraser
-          ? Colors.white.withValues(alpha: 0.4)
-          : effectiveColor.withValues(alpha: 0.4)
+          ? Colors.white.withValues(alpha: 0.7)
+          : effectiveColor.withValues(alpha: 0.7)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 1.2;
 
     canvas.drawCircle(screenPos, (effectiveSize * zoomLevel) / 2, paint);
     canvas.drawCircle(screenPos, (effectiveSize * zoomLevel) / 2, borderPaint);
@@ -284,7 +290,8 @@ class WhiteboardPainter extends CustomPainter {
           ? Colors.white.withValues(alpha: 0.8)
           : effectiveColor.withValues(alpha: 0.8)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(screenPos, 1.5, dotPaint);
+    final dotRadius = math.max(1.6, (effectiveSize * zoomLevel) / 18);
+    canvas.drawCircle(screenPos, dotRadius, dotPaint);
   }
 
   @override

@@ -38,6 +38,12 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i818.HandwritingRecognitionService>(
       () => _i818.HandwritingRecognitionService(),
     );
+    gh.factory<_i655.SettingsCubit>(
+      () => _i655.SettingsCubit(
+        gh<_i818.HandwritingRecognitionService>(),
+        gh<_i134.MLShapeService>(),
+      ),
+    );
     gh.factory<_i697.DrawingCubit>(
       () => _i697.DrawingCubit(
         gh<_i818.HandwritingRecognitionService>(),
@@ -46,12 +52,6 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i790.IProgressRepository>(
       () => _i447.ProgressRepositoryImpl(),
-    );
-    gh.factory<_i655.SettingsCubit>(
-      () => _i655.SettingsCubit(
-        gh<_i818.HandwritingRecognitionService>(),
-        gh<_i134.MLShapeService>(),
-      ),
     );
     gh.factory<_i123.ProgressCubit>(
       () => _i123.ProgressCubit(gh<_i790.IProgressRepository>()),

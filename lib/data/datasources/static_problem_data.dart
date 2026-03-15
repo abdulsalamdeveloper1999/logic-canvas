@@ -1,6 +1,42 @@
 import 'package:logic_canvas/domain/entities/problem.dart';
 
 class ProblemData {
+  // Free plan: small starter pack across categories.
+  // Pro unlocks the full lists (Pareto 49 / Blind 75).
+  static final List<Problem> starterPack = (() {
+    final categories = <String>[
+      'Arrays & Hashing',
+      'Two Pointers',
+      'Sliding Window',
+      'Stack',
+      'Binary Search',
+      'Linked List',
+      'Trees',
+      'Heap / Priority Queue',
+      'Graphs',
+    ];
+
+    final out = <Problem>[];
+    final seenIds = <String>{};
+
+    for (final cat in categories) {
+      try {
+        final p = paretoProblems.firstWhere((e) => e.category == cat);
+        if (seenIds.add(p.id)) out.add(p);
+      } catch (_) {
+        // If a category isn't present for some reason, skip it.
+      }
+    }
+
+    // Fill up to 15 with the earliest (generally easier) Pareto problems.
+    for (final p in paretoProblems) {
+      if (out.length >= 15) break;
+      if (seenIds.add(p.id)) out.add(p);
+    }
+
+    return out;
+  })();
+
   static const List<Problem> paretoProblems = [
     // Arrays & Hashing
     Problem(

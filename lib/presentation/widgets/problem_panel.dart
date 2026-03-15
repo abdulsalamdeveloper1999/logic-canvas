@@ -5,6 +5,8 @@ import 'package:logic_canvas/presentation/cubits/progress/progress_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/progress/progress_state.dart';
 import 'package:logic_canvas/domain/entities/problem.dart';
 import 'package:logic_canvas/data/datasources/static_problem_data.dart';
+import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
+import 'package:logic_canvas/presentation/widgets/upgrade_dialog.dart';
 
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart';
@@ -15,6 +17,7 @@ class ProblemPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPro = context.select((EntitlementsCubit c) => c.state.isPro);
     return BlocBuilder<ProgressCubit, ProgressState>(
       builder: (context, progress) {
         return BlocBuilder<SelectionCubit, SelectionState>(
@@ -43,6 +46,7 @@ class ProblemPanel extends StatelessWidget {
                       context,
                       selection.currentList,
                       progress.completedProblemIds,
+                      isPro,
                     ),
             );
           },
@@ -55,10 +59,12 @@ class ProblemPanel extends StatelessWidget {
     BuildContext context,
     String currentList,
     Set<String> completedIds,
+    bool isPro,
   ) {
-    final problems = currentList == 'Pareto 49'
+    final allProblems = currentList == 'Pareto 49'
         ? ProblemData.paretoProblems
         : ProblemData.blind75;
+    final problems = isPro ? allProblems : ProblemData.starterPack;
 
     final grouped = <String, List<Problem>>{};
     for (var p in problems) {
@@ -67,7 +73,7 @@ class ProblemPanel extends StatelessWidget {
 
     return Column(
       children: [
-        _buildHeader(context, currentList),
+        _buildHeader(context, currentList, isPro),
         Expanded(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -424,19 +430,70 @@ class ProblemPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, String currentList) {
+  Widget _buildHeader(BuildContext context, String currentList, bool isPro) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _buildTabButton(context, 'Pareto 49', currentList == 'Pareto 49'),
-              const SizedBox(width: 8),
-              _buildTabButton(context, 'Blind 75', currentList == 'Blind 75'),
-            ],
-          ),
+          if (isPro)
+            Row(
+              children: [
+                _buildTabButton(
+                  context,
+                  'Pareto 49',
+                  currentList == 'Pareto 49',
+                ),
+                const SizedBox(width: 8),
+                _buildTabButton(context, 'Blind 75', currentList == 'Blind 75'),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.1,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Text(
+                        'STARTER PACK',
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () => UpgradeDialog.show(context),
+                  icon: const Icon(Icons.lock_rounded, size: 16),
+                  label: const Text('Pro'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

@@ -14,6 +14,8 @@ import 'package:logic_canvas/presentation/widgets/problem_panel.dart';
 import 'package:logic_canvas/domain/entities/problem.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:logic_canvas/presentation/widgets/icon_picker_sheet.dart';
+import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
+import 'package:logic_canvas/presentation/widgets/upgrade_dialog.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -22,6 +24,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final orientation = MediaQuery.of(context).orientation;
     final sidebarWidth = orientation == Orientation.landscape ? 350.0 : 280.0;
+    final isPro = context.select((EntitlementsCubit c) => c.state.isPro);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -39,7 +42,7 @@ class HomePage extends StatelessWidget {
                     top: 0,
                     left: 0,
                     right: 0,
-                    child: _buildTopBar(context, selectedProblem),
+                    child: _buildTopBar(context, selectedProblem, isPro),
                   ),
 
                   if (selectedProblem != null)
@@ -96,6 +99,7 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildIntelligenceRow(BuildContext context, SettingsState settings) {
+    final isPro = context.select((EntitlementsCubit c) => c.state.isPro);
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -114,15 +118,19 @@ class HomePage extends StatelessWidget {
               _smallToggleButton(
                 context, 
                 Icons.draw_rounded, 
-                () => context.read<SettingsCubit>().toggleShapeDetection(), 
-                settings.enableShapeDetection, 
+                () => isPro
+                    ? context.read<SettingsCubit>().toggleShapeDetection()
+                    : UpgradeDialog.show(context),
+                isPro && settings.enableShapeDetection, 
                 tooltip: "Shape Detector",
               ),
               _smallToggleButton(
                 context, 
                 Icons.text_fields_rounded, 
-                () => context.read<SettingsCubit>().toggleHandwritingRecognition(), 
-                settings.enableHandwritingRecognition, 
+                () => isPro
+                    ? context.read<SettingsCubit>().toggleHandwritingRecognition()
+                    : UpgradeDialog.show(context),
+                isPro && settings.enableHandwritingRecognition, 
                 tooltip: "Paint to Text (Handwriting)",
               ),
 
@@ -142,15 +150,48 @@ class HomePage extends StatelessWidget {
               _divider(),
 
               // Global Actions
-              _smallIconButton(context, Icons.delete_sweep_rounded, () {
-                 HapticFeedback.heavyImpact();
-                 context.read<DrawingCubit>().clear();
-              }, color: Colors.redAccent.withValues(alpha: 0.8), tooltip: "Clear All Board"),
+              _smallIconButton(
+                context,
+                Icons.delete_sweep_rounded,
+                () => _confirmClearBoard(context),
+                color: Colors.redAccent.withValues(alpha: 0.8),
+                tooltip: "Clear Board",
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmClearBoard(BuildContext context) async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Clear board'),
+        content: const Text(
+          'Are you sure you want to clear the board?\n\n'
+          'This will remove all strokes and icons from the current board.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldClear == true && context.mounted) {
+      HapticFeedback.heavyImpact();
+      context.read<DrawingCubit>().clear();
+    }
   }
 
   Widget _buildMainIntegratedBar(BuildContext context, SettingsState settings) {
@@ -174,7 +215,7 @@ class HomePage extends StatelessWidget {
               // Core Tools
               _toolbarButton(context, Icons.edit_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.pen), settings.toolMode == ToolMode.pen, tooltip: "Pen"),
               _toolbarButton(context, Icons.pan_tool_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.hand), settings.toolMode == ToolMode.hand, tooltip: "Hand (Pan)"),
-              _toolbarButton(context, Icons.history_edu_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.connector), settings.toolMode == ToolMode.connector, tooltip: "Connector"),
+              _toolbarButton(context, Icons.device_hub_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.connector), settings.toolMode == ToolMode.connector, tooltip: "Connector"),
               _toolbarButton(context, Icons.category_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.diagram), settings.toolMode == ToolMode.diagram, tooltip: "Diagram Icons"),
               _toolbarButton(context, Icons.auto_fix_high_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.eraser), settings.toolMode == ToolMode.eraser, tooltip: "Eraser"),
               
@@ -190,6 +231,7 @@ class HomePage extends StatelessWidget {
 
               // Styling Controls
               _buildColorButton(context, settings.strokeColor),
+              _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, settings.isEraser),
               _buildWidthSlider(context, settings.strokeWidth),
 
               _divider(),
@@ -222,14 +264,15 @@ class HomePage extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (iconPath != null) SvgPicture.asset(iconPath, width: 24, height: 24)
-                else const Icon(Icons.search_rounded, size: 24, color: Colors.blueAccent),
-                const SizedBox(width: 10),
+                // Reduce preview icon size (~1.2x smaller).
+                if (iconPath != null) SvgPicture.asset(iconPath, width: 20, height: 20)
+                else const Icon(Icons.search_rounded, size: 20, color: Colors.blueAccent),
+                const SizedBox(width: 8),
                 Text(
                   iconPath?.split('/').last.split('.').first.replaceAll('-', ' ').toUpperCase() ?? "SEARCH CLOUD ICONS",
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.blueAccent, letterSpacing: 1.0),
                 ),
-                const Icon(Icons.arrow_right_rounded, color: Colors.blueAccent),
+                const Icon(Icons.arrow_right_rounded, size: 20, color: Colors.blueAccent),
               ],
             ),
           ),
@@ -239,18 +282,47 @@ class HomePage extends StatelessWidget {
   }
 
   void _showIconPicker(BuildContext context, SettingsState settings) {
-    showDialog(
+    final isPro = context.read<EntitlementsCubit>().state.isPro;
+    showGeneralDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
-        child: IconPickerSheet(
-          selectedIconPath: settings.selectedIconPath,
-          onIconSelected: (path) {
-            context.read<SettingsCubit>().setSelectedIconPath(path);
-          },
-        ),
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Asset Library',
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final size = MediaQuery.of(context).size;
+        return Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 600,
+                  maxHeight: size.height * 0.8,
+                ),
+                child: IconPickerSheet(
+                  isPro: isPro,
+                  selectedIconPath: settings.selectedIconPath,
+                  onIconSelected: (path) {
+                    context.read<SettingsCubit>().setSelectedIconPath(path);
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curve,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(curve),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -296,7 +368,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildTopBar(BuildContext context, Problem? selectedProblem) {
+  Widget _buildTopBar(BuildContext context, Problem? selectedProblem, bool isPro) {
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
@@ -305,20 +377,18 @@ class HomePage extends StatelessWidget {
           decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4), border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
           child: SafeArea(
             bottom: false,
-            child: Row(
+              child: Row(
               children: [
-                GestureDetector(
-                  onTap: () => context.read<SettingsCubit>().toggleSidebar(),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.menu_rounded, color: Colors.blueAccent),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 const Text("LogicCanvas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.8)),
                 const Spacer(),
-                const Text("Premium Edition", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.bold)),
+                Text(
+                  isPro ? "Pro" : "Free",
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           ),
@@ -373,7 +443,56 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildWidthSlider(BuildContext context, double currentWidth) {
-    return SizedBox(width: 80, child: Slider(value: currentWidth, min: 1, max: 20, onChanged: (value) => context.read<SettingsCubit>().setStrokeWidth(value)));
+    const minWidth = 1.0;
+    const maxWidth = 50.0; // Must cover preset values (e.g. 24.0) and persisted settings.
+    final safeWidth = currentWidth.clamp(minWidth, maxWidth);
+    return SizedBox(
+      width: 80,
+      child: Slider(
+        value: safeWidth,
+        min: minWidth,
+        max: maxWidth,
+        onChanged: (value) => context.read<SettingsCubit>().setStrokeWidth(value),
+      ),
+    );
+  }
+
+  Widget _buildBrushSizePreview(double strokeWidth, Color strokeColor, bool isEraser) {
+    final safe = strokeWidth.clamp(1.0, 50.0);
+    // Toolbar preview should stay compact; map to 6..20 px diameter.
+    final diameter = (6.0 + (safe - 1.0) * (14.0 / 49.0)).clamp(6.0, 20.0);
+
+    final fill = isEraser
+        ? Colors.white.withValues(alpha: 0.12)
+        : strokeColor.withValues(alpha: 0.85);
+    final border = isEraser ? Colors.white54 : Colors.white24;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          width: diameter,
+          height: diameter,
+          decoration: BoxDecoration(
+            color: fill,
+            shape: BoxShape.circle,
+            border: Border.all(color: border, width: 1),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _divider() => Padding(
