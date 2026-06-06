@@ -15,7 +15,7 @@ export default function App() {
   const [showSupport, setShowSupport] = useState(false);
   const [supportMessageSent, setSupportMessageSent] = useState(false);
 
-  const SUPPORT_URL = "https://github.com/abdulsalamdeveloper1999/logic-canvas/issues";
+  const SUPPORT_URL = "https://logiccanvas.asdevify.uk/support";
   const MARKETING_URL = "https://logiccanvas.asdevify.uk";
   const PRIVACY_URL = "https://logiccanvas.asdevify.uk/privacy";
   const TERMS_URL = "https://logiccanvas.asdevify.uk/terms";
