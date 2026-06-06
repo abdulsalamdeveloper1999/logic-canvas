@@ -10,8 +10,8 @@ import 'settings_state.dart';
 class SettingsCubit extends Cubit<SettingsState> {
   static const String _boxName = 'settings';
   static const String _settingsKey = 'user_settings';
-  static const double _minStrokeWidth = 1.0;
-  static const double _maxStrokeWidth = 50.0;
+  static const double _maxPenWidth = 50.0;
+  static const double _maxEraserWidth = 100.0;
   final HandwritingRecognitionService _handwritingService;
   final MLShapeService _mlShapeService;
 
@@ -41,20 +41,22 @@ class SettingsCubit extends Cubit<SettingsState> {
         ? ThemeMode.light
         : ThemeMode.dark;
 
-    // Auto-adjust default pen color to ensure visibility
     Color newStrokeColor = state.strokeColor;
+    final currentAlpha = state.strokeColor.a;
 
-    // If switching to Light Mode and color is too light, switch to Black
-    if (newThemeMode == ThemeMode.light &&
-        (state.strokeColor == Colors.white ||
-            state.strokeColor.computeLuminance() > 0.8)) {
-      newStrokeColor = Colors.black;
-    }
-    // If switching to Dark Mode and color is too dark, switch to White
-    else if (newThemeMode == ThemeMode.dark &&
-        (state.strokeColor == Colors.black ||
-            state.strokeColor.computeLuminance() < 0.2)) {
-      newStrokeColor = Colors.white;
+    // Use ARGB comparisons for exact matches, and luminance for near-matches
+    final isWhite = state.strokeColor.toARGB32() == Colors.white.toARGB32();
+    final isBlack = state.strokeColor.toARGB32() == Colors.black.toARGB32();
+    final luminance = state.strokeColor.computeLuminance();
+
+    if (newThemeMode == ThemeMode.light) {
+      if (isWhite || luminance > 0.9) {
+        newStrokeColor = Colors.black.withValues(alpha: currentAlpha);
+      }
+    } else {
+      if (isBlack || luminance < 0.1) {
+        newStrokeColor = Colors.white.withValues(alpha: currentAlpha);
+      }
     }
 
     emit(state.copyWith(themeMode: newThemeMode, strokeColor: newStrokeColor));
@@ -74,7 +76,11 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setStrokeWidth(double width) {
-    emit(state.copyWith(strokeWidth: width.clamp(_minStrokeWidth, _maxStrokeWidth)));
+    if (state.isEraser) {
+      emit(state.copyWith(eraserStrokeWidth: width.clamp(1.0, _maxEraserWidth)));
+    } else {
+      emit(state.copyWith(penStrokeWidth: width.clamp(1.0, _maxPenWidth)));
+    }
     _saveSettings();
   }
 
@@ -150,7 +156,7 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setBrushPreset(double width) {
     emit(
       state.copyWith(
-        strokeWidth: width.clamp(_minStrokeWidth, _maxStrokeWidth),
+        penStrokeWidth: width.clamp(1.0, _maxPenWidth),
         toolMode: ToolMode.pen,
         isEraser: false,
       ),
@@ -202,6 +208,17 @@ class SettingsCubit extends Cubit<SettingsState> {
         iconSelectionNonce: state.iconSelectionNonce + 1,
       ),
     );
+    _saveSettings();
+  }
+
+  void toggleICloudSync() {
+    emit(state.copyWith(isICloudSyncEnabled: !state.isICloudSyncEnabled));
+    _saveSettings();
+  }
+
+  void setICloudQuotaExceeded(bool exceeded) {
+    if (state.isICloudQuotaExceeded == exceeded) return;
+    emit(state.copyWith(isICloudQuotaExceeded: exceeded));
     _saveSettings();
   }
 }

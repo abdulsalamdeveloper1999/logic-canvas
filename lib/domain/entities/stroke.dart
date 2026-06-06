@@ -16,6 +16,9 @@ class Stroke with _$Stroke {
     @Default(StrokeType.pen) StrokeType type,
     String? text,
     String? iconPath,
+    @Default(1.0) double scale,
+    @Default(0.0) double rotation,
+    @Default(false) bool isSelected,
   }) = _Stroke;
 
   factory Stroke.fromJson(Map<String, dynamic> json) {
@@ -32,6 +35,9 @@ class Stroke with _$Stroke {
       ),
       text: json['text'] as String?,
       iconPath: json['iconPath'] as String?,
+      scale: (json['scale'] as num?)?.toDouble() ?? 1.0,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+      isSelected: json['isSelected'] as bool? ?? false,
     );
   }
 }
@@ -46,6 +52,9 @@ extension StrokeX on Stroke {
       'type': type.name,
       'text': text,
       'iconPath': iconPath,
+      'scale': scale,
+      'rotation': rotation,
+      'isSelected': isSelected,
     };
   }
 }

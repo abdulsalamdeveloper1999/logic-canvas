@@ -24,6 +24,9 @@ mixin _$Stroke {
   StrokeType get type => throw _privateConstructorUsedError;
   String? get text => throw _privateConstructorUsedError;
   String? get iconPath => throw _privateConstructorUsedError;
+  double get scale => throw _privateConstructorUsedError;
+  double get rotation => throw _privateConstructorUsedError;
+  bool get isSelected => throw _privateConstructorUsedError;
 
   /// Create a copy of Stroke
   /// with the given fields replaced by the non-null parameter values.
@@ -44,6 +47,9 @@ abstract class $StrokeCopyWith<$Res> {
     StrokeType type,
     String? text,
     String? iconPath,
+    double scale,
+    double rotation,
+    bool isSelected,
   });
 }
 
@@ -69,6 +75,9 @@ class _$StrokeCopyWithImpl<$Res, $Val extends Stroke>
     Object? type = null,
     Object? text = freezed,
     Object? iconPath = freezed,
+    Object? scale = null,
+    Object? rotation = null,
+    Object? isSelected = null,
   }) {
     return _then(
       _value.copyWith(
@@ -100,6 +109,18 @@ class _$StrokeCopyWithImpl<$Res, $Val extends Stroke>
                 ? _value.iconPath
                 : iconPath // ignore: cast_nullable_to_non_nullable
                       as String?,
+            scale: null == scale
+                ? _value.scale
+                : scale // ignore: cast_nullable_to_non_nullable
+                      as double,
+            rotation: null == rotation
+                ? _value.rotation
+                : rotation // ignore: cast_nullable_to_non_nullable
+                      as double,
+            isSelected: null == isSelected
+                ? _value.isSelected
+                : isSelected // ignore: cast_nullable_to_non_nullable
+                      as bool,
           )
           as $Val,
     );
@@ -122,6 +143,9 @@ abstract class _$$StrokeImplCopyWith<$Res> implements $StrokeCopyWith<$Res> {
     StrokeType type,
     String? text,
     String? iconPath,
+    double scale,
+    double rotation,
+    bool isSelected,
   });
 }
 
@@ -146,6 +170,9 @@ class __$$StrokeImplCopyWithImpl<$Res>
     Object? type = null,
     Object? text = freezed,
     Object? iconPath = freezed,
+    Object? scale = null,
+    Object? rotation = null,
+    Object? isSelected = null,
   }) {
     return _then(
       _$StrokeImpl(
@@ -177,6 +204,18 @@ class __$$StrokeImplCopyWithImpl<$Res>
             ? _value.iconPath
             : iconPath // ignore: cast_nullable_to_non_nullable
                   as String?,
+        scale: null == scale
+            ? _value.scale
+            : scale // ignore: cast_nullable_to_non_nullable
+                  as double,
+        rotation: null == rotation
+            ? _value.rotation
+            : rotation // ignore: cast_nullable_to_non_nullable
+                  as double,
+        isSelected: null == isSelected
+            ? _value.isSelected
+            : isSelected // ignore: cast_nullable_to_non_nullable
+                  as bool,
       ),
     );
   }
@@ -193,6 +232,9 @@ class _$StrokeImpl implements _Stroke {
     this.type = StrokeType.pen,
     this.text,
     this.iconPath,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.isSelected = false,
   }) : _points = points;
 
   final List<Offset> _points;
@@ -217,10 +259,19 @@ class _$StrokeImpl implements _Stroke {
   final String? text;
   @override
   final String? iconPath;
+  @override
+  @JsonKey()
+  final double scale;
+  @override
+  @JsonKey()
+  final double rotation;
+  @override
+  @JsonKey()
+  final bool isSelected;
 
   @override
   String toString() {
-    return 'Stroke(points: $points, color: $color, strokeWidth: $strokeWidth, isEraser: $isEraser, type: $type, text: $text, iconPath: $iconPath)';
+    return 'Stroke(points: $points, color: $color, strokeWidth: $strokeWidth, isEraser: $isEraser, type: $type, text: $text, iconPath: $iconPath, scale: $scale, rotation: $rotation, isSelected: $isSelected)';
   }
 
   @override
@@ -237,7 +288,12 @@ class _$StrokeImpl implements _Stroke {
             (identical(other.type, type) || other.type == type) &&
             (identical(other.text, text) || other.text == text) &&
             (identical(other.iconPath, iconPath) ||
-                other.iconPath == iconPath));
+                other.iconPath == iconPath) &&
+            (identical(other.scale, scale) || other.scale == scale) &&
+            (identical(other.rotation, rotation) ||
+                other.rotation == rotation) &&
+            (identical(other.isSelected, isSelected) ||
+                other.isSelected == isSelected));
   }
 
   @override
@@ -250,6 +306,9 @@ class _$StrokeImpl implements _Stroke {
     type,
     text,
     iconPath,
+    scale,
+    rotation,
+    isSelected,
   );
 
   /// Create a copy of Stroke
@@ -270,6 +329,9 @@ abstract class _Stroke implements Stroke {
     final StrokeType type,
     final String? text,
     final String? iconPath,
+    final double scale,
+    final double rotation,
+    final bool isSelected,
   }) = _$StrokeImpl;
 
   @override
@@ -286,6 +348,12 @@ abstract class _Stroke implements Stroke {
   String? get text;
   @override
   String? get iconPath;
+  @override
+  double get scale;
+  @override
+  double get rotation;
+  @override
+  bool get isSelected;
 
   /// Create a copy of Stroke
   /// with the given fields replaced by the non-null parameter values.

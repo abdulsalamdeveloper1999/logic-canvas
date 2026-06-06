@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,7 +11,13 @@ import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit
 import 'package:logic_canvas/presentation/widgets/grid_painter.dart';
 import 'package:logic_canvas/presentation/widgets/whiteboard_painter.dart';
 
+import 'package:screenshot/screenshot.dart';
+import 'package:logic_canvas/data/services/export_service.dart';
+import 'package:logic_canvas/core/injection.dart';
+
 import '../cubits/settings/settings_state.dart';
+
+enum _TransformHandle { none, topLeft, topRight, bottomLeft, bottomRight, rotate, delete }
 
 class WhiteboardView extends StatefulWidget {
   const WhiteboardView({super.key});
@@ -22,13 +27,19 @@ class WhiteboardView extends StatefulWidget {
 }
 
 class _WhiteboardViewState extends State<WhiteboardView> {
+  final ExportService _exportService = getIt<ExportService>();
   Offset? _pendingPoint;
   bool _hasInitiatedWithMovement = false;
   int? _activePointerId;
   PointerDeviceKind? _activePointerKind;
   final Set<int> _activeTouchPointers = <int>{};
   int? _draggingIconIndex;
+  _TransformHandle _activeHandle = _TransformHandle.none;
   Offset _draggingIconDelta = Offset.zero;
+  double _initialScale = 1.0;
+  double _initialRotation = 0.0;
+  double _initialAngle = 0.0;
+  Offset _initialHandleOffset = Offset.zero;
   bool _draggingIconIsNewlyPlaced = false;
   Size? _lastBoardSize;
   double? _scaleBaseZoom;
@@ -113,7 +124,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                 }
               }
 
-              if (settings.toolMode != ToolMode.hand && !drawingState.isDrawing) {
+              if (settings.toolMode != ToolMode.hand &&
+                  !drawingState.isDrawing) {
                 // Priority Check: If we have an active pointer and this is a stylus, Stylus wins
                 if (event.kind == PointerDeviceKind.stylus ||
                     _activePointerId == null) {
@@ -123,12 +135,61 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                   _hasInitiatedWithMovement = false;
 
                   if (settings.toolMode == ToolMode.diagram) {
+                    final canvasPoint = _toCanvasPoint(settings, event.localPosition);
+                    
+                    // 1. Check if we hit a handle of already selected icon
+                    if (drawingState.selectedStrokeIndex != null &&
+                        drawingState.selectedStrokeIndex! <
+                            drawingState.activeStrokes.length) {
+                      final stroke = drawingState.activeStrokes[
+                          drawingState.selectedStrokeIndex!];
+                      if (stroke.type == StrokeType.icon) {
+                        final handle = _hitTestHandles(canvasPoint, stroke);
+                        if (handle == _TransformHandle.delete) {
+                          drawingCubit.removeStrokeAt(drawingState.selectedStrokeIndex!);
+                          _activePointerId = null;
+                          _activePointerKind = null;
+                          return;
+                        }
+                        if (handle != _TransformHandle.none) {
+                          _activeHandle = handle;
+                          _draggingIconIndex = drawingState.selectedStrokeIndex;
+                          _initialScale = stroke.scale;
+                          _initialRotation = stroke.rotation;
+                          _initialHandleOffset = canvasPoint - stroke.points.first;
+                          _initialAngle = (canvasPoint - stroke.points.first).direction;
+                          _pendingPoint = null;
+                          return;
+                        }
+                      }
+                    }
+
+                    // 2. Check if we hit another icon to select/drag
+                    final hitIndex = _hitTestIconStrokeIndex(
+                      strokes: drawingState.activeStrokes,
+                      canvasPoint: canvasPoint,
+                    );
+                    
+                    if (hitIndex != null) {
+                      drawingCubit.selectStroke(hitIndex);
+                      final hitStroke = drawingState.activeStrokes[hitIndex];
+                      _draggingIconIndex = hitIndex;
+                      _draggingIconDelta = canvasPoint - hitStroke.points.first;
+                      _activeHandle = _TransformHandle.none;
+                      _pendingPoint = null;
+                      return;
+                    } else {
+                      // Tapped empty space in diagram mode -> deselect
+                      drawingCubit.selectStroke(null);
+                    }
+
+                    // 3. Fallback to diagram placement logic
                     _handleDiagramPointerDown(
                       localPosition: event.localPosition,
                       settings: settings,
                       drawingCubit: drawingCubit,
                     );
-                    _pendingPoint = null; // prevent long-press from starting a pen stroke
+                    _pendingPoint = null;
                     return;
                   }
 
@@ -152,28 +213,71 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               _hoverPositionNotifier.value = canvasPoint;
 
               if (_draggingIconIndex != null) {
-                // If a second finger is down, stop moving icons and allow pinch.
                 if (_activeTouchPointers.length >= 2) return;
                 final idx = _draggingIconIndex!;
-                if (idx < 0 || idx >= drawingCubit.state.strokes.length) return;
-                final s = drawingCubit.state.strokes[idx];
-                final updated = s.copyWith(
-                  points: [canvasPoint - _draggingIconDelta],
-                );
-                drawingCubit.updateStrokeAt(idx, updated);
+                if (idx < 0 || idx >= drawingCubit.activeStrokes.length) return;
+                final s = drawingCubit.activeStrokes[idx];
+
+                if (_activeHandle == _TransformHandle.none) {
+                  // Standard Drag
+                  final updated = s.copyWith(
+                    points: [canvasPoint - _draggingIconDelta],
+                  );
+                  drawingCubit.updateStrokeAt(idx, updated);
+                } else if (_activeHandle == _TransformHandle.rotate) {
+                  // Rotation logic
+                  final currentAngle = (canvasPoint - s.points.first).direction;
+                  final angleDelta = currentAngle - _initialAngle;
+                  drawingCubit.updateStrokeTransform(
+                    index: idx,
+                    rotation: _initialRotation + angleDelta,
+                  );
+                } else {
+                  // Resizing logic (corners)
+                  final currentDist = (canvasPoint - s.points.first).distance;
+                  final initialDist = _initialHandleOffset.distance;
+                  if (initialDist > 0) {
+                    final scaleFactor = currentDist / initialDist;
+                    drawingCubit.updateStrokeTransform(
+                      index: idx,
+                      scale: _initialScale * scaleFactor,
+                    );
+                  }
+                }
                 return;
               }
 
               if (_activeStrokeNotifier.value != null) {
                 final currentStroke = _activeStrokeNotifier.value!;
 
-                final List<Offset> updatedPoints = List<Offset>.from(
-                  currentStroke.points,
-                )..add(canvasPoint);
+                if (currentStroke.type == StrokeType.connector &&
+                    currentStroke.points.isNotEmpty) {
+                  final start = currentStroke.points.first;
+                  Offset snappedPoint = canvasPoint;
 
-                _activeStrokeNotifier.value = currentStroke.copyWith(
-                  points: updatedPoints,
-                );
+                  // Snap to horizontal or vertical if close enough (20.0 units)
+                  const double snapThreshold = 20.0;
+                  final dx = (canvasPoint.dx - start.dx).abs();
+                  final dy = (canvasPoint.dy - start.dy).abs();
+
+                  if (dy < snapThreshold) {
+                    snappedPoint = Offset(canvasPoint.dx, start.dy);
+                  } else if (dx < snapThreshold) {
+                    snappedPoint = Offset(start.dx, canvasPoint.dy);
+                  }
+
+                  _activeStrokeNotifier.value = currentStroke.copyWith(
+                    points: [start, snappedPoint],
+                  );
+                } else {
+                  final List<Offset> updatedPoints = List<Offset>.from(
+                    currentStroke.points,
+                  )..add(canvasPoint);
+
+                  _activeStrokeNotifier.value = currentStroke.copyWith(
+                    points: updatedPoints,
+                  );
+                }
               }
             },
             onPointerUp: (event) async {
@@ -187,16 +291,15 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               if (_draggingIconIndex != null) {
                 _draggingIconIndex = null;
                 _draggingIconDelta = Offset.zero;
-                await drawingCubit.persistBoard();
                 return;
               }
 
               final settings = settingsCubit.state;
-              final isPro = context.read<EntitlementsCubit>().state.isPro;
+              final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
               await _cleanupDrawing(
                 drawingCubit,
-                isPro && settings.enableShapeDetection,
-                isPro && settings.enableHandwritingRecognition,
+                isSubscribed && settings.enableShapeDetection,
+                isSubscribed && settings.enableHandwritingRecognition,
               );
             },
             onPointerCancel: (event) async {
@@ -210,16 +313,15 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               if (_draggingIconIndex != null) {
                 _draggingIconIndex = null;
                 _draggingIconDelta = Offset.zero;
-                await drawingCubit.persistBoard();
                 return;
               }
 
               final settings = settingsCubit.state;
-              final isPro = context.read<EntitlementsCubit>().state.isPro;
+              final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
               await _cleanupDrawing(
                 drawingCubit,
-                isPro && settings.enableShapeDetection,
-                isPro && settings.enableHandwritingRecognition,
+                isSubscribed && settings.enableShapeDetection,
+                isSubscribed && settings.enableHandwritingRecognition,
               );
             },
             child: GestureDetector(
@@ -229,13 +331,15 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               onScaleStart: (details) {
                 final settings = settingsCubit.state;
                 final drawingState = drawingCubit.state;
-                if (drawingState.isDrawing || _activeStrokeNotifier.value != null) {
+                if (drawingState.isDrawing ||
+                    _activeStrokeNotifier.value != null) {
                   return;
                 }
 
                 // If a pinch starts while we were dragging an icon, cancel icon drag
                 // so the gesture can control the viewport transform.
-                if (_draggingIconIndex != null && _activeTouchPointers.length >= 2) {
+                if (_draggingIconIndex != null &&
+                    _activeTouchPointers.length >= 2) {
                   _cancelIconDrag(drawingCubit, removeIfNew: true);
                 }
 
@@ -243,12 +347,13 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                 _scaleBasePan = settings.panOffset;
                 _scaleBaseCanvasFocal =
                     (details.localFocalPoint - settings.panOffset) /
-                        settings.zoomLevel;
+                    settings.zoomLevel;
               },
               onScaleUpdate: (details) {
                 final settings = settingsCubit.state;
                 final drawingState = drawingCubit.state;
-                if (drawingState.isDrawing || _activeStrokeNotifier.value != null) {
+                if (drawingState.isDrawing ||
+                    _activeStrokeNotifier.value != null) {
                   return;
                 }
 
@@ -271,7 +376,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
 
                 if (isPinch) {
                   final baseZoom = _scaleBaseZoom ?? settings.zoomLevel;
-                  final baseCanvasFocal = _scaleBaseCanvasFocal ??
+                  final baseCanvasFocal =
+                      _scaleBaseCanvasFocal ??
                       ((details.localFocalPoint - settings.panOffset) /
                           settings.zoomLevel);
 
@@ -291,7 +397,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                 }
               },
               onScaleEnd: (details) async {
-                final didTransform = _scaleBaseZoom != null ||
+                final didTransform =
+                    _scaleBaseZoom != null ||
                     _scaleBasePan != null ||
                     _scaleBaseCanvasFocal != null;
                 _scaleBaseZoom = null;
@@ -306,134 +413,139 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                 final settings = settingsCubit.state;
                 final drawingState = drawingCubit.state;
                 if (settings.toolMode == ToolMode.diagram) return;
-              if (_pendingPoint != null &&
-                !drawingState.isDrawing &&
-                !_hasInitiatedWithMovement) {
-              _handleDrawingStart(
-                context,
-                _pendingPoint!,
-                settings,
-                drawingCubit,
-                settingsCubit,
-              );
-              final isPro = context.read<EntitlementsCubit>().state.isPro;
-              await _cleanupDrawing(
-                drawingCubit,
-                isPro && settings.enableShapeDetection,
-                isPro && settings.enableHandwritingRecognition,
-              );
-              _pendingPoint = null;
-            }
-          },
-          child: MultiBlocListener(
-            listeners: [
-              BlocListener<SettingsCubit, SettingsState>(
-                listenWhen: (prev, curr) =>
-                    prev.iconSelectionNonce != curr.iconSelectionNonce,
-                listener: (context, settings) {
-                  final path = settings.selectedIconPath;
-                  if (settings.toolMode != ToolMode.diagram || path == null) {
-                    return;
-                  }
-                  _autoDropSelectedIcon(
-                    settings: settings,
-                    drawingCubit: drawingCubit,
-                    iconPath: path,
+                if (_pendingPoint != null &&
+                    !drawingState.isDrawing &&
+                    !_hasInitiatedWithMovement) {
+                  _handleDrawingStart(
+                    context,
+                    _pendingPoint!,
+                    settings,
+                    drawingCubit,
+                    settingsCubit,
                   );
-                },
-              ),
-              BlocListener<DrawingCubit, DrawingState>(
-                listenWhen: (prev, curr) => prev.strokes != curr.strokes,
-                listener: (context, state) {
-                  // Load SVGs for any new icon strokes
-                  for (final stroke in state.strokes) {
-                    if (stroke.type == StrokeType.icon &&
-                        stroke.iconPath != null) {
-                      _loadSvg(stroke.iconPath!);
-                    }
-                  }
-                },
-              ),
-            ],
-            child: Stack(
-              children: [
-                // 1. Static Layer: Infinite Background Grid
-                BlocBuilder<SettingsCubit, SettingsState>(
-                  buildWhen: (prev, curr) =>
-                      prev.pattern != curr.pattern ||
-                      prev.panOffset != curr.panOffset ||
-                      prev.zoomLevel != curr.zoomLevel ||
-                      prev.themeMode != curr.themeMode,
-                  builder: (context, settings) {
-                    return RepaintBoundary(
-                      child: CustomPaint(
-                        painter: GridPainter(
-                          pattern: settings.pattern,
-                          panOffset: settings.panOffset,
-                          zoomLevel: settings.zoomLevel,
-                          themeMode: settings.themeMode,
-                        ),
-                        size: Size.infinite,
+                  final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
+                  await _cleanupDrawing(
+                    drawingCubit,
+                    isSubscribed && settings.enableShapeDetection,
+                    isSubscribed && settings.enableHandwritingRecognition,
+                  );
+                  _pendingPoint = null;
+                }
+              },
+              child: MultiBlocListener(
+                listeners: [
+                  BlocListener<SettingsCubit, SettingsState>(
+                    listenWhen: (prev, curr) =>
+                        prev.iconSelectionNonce != curr.iconSelectionNonce,
+                    listener: (context, settings) {
+                      final path = settings.selectedIconPath;
+                      if (settings.toolMode != ToolMode.diagram ||
+                          path == null) {
+                        return;
+                      }
+                      _autoDropSelectedIcon(
+                        settings: settings,
+                        drawingCubit: drawingCubit,
+                        iconPath: path,
+                      );
+                    },
+                  ),
+                  BlocListener<DrawingCubit, DrawingState>(
+                    listenWhen: (prev, curr) => prev.activeStrokes != curr.activeStrokes,
+                    listener: (context, state) {
+                      // Load SVGs for any new icon strokes
+                      for (final stroke in state.activeStrokes) {
+                        if (stroke.type == StrokeType.icon &&
+                            stroke.iconPath != null) {
+                          _loadSvg(stroke.iconPath!);
+                        }
+                      }
+                    },
+                  ),
+                ],
+                child: Screenshot(
+                  controller: _exportService.screenshotController,
+                  child: Stack(
+                    children: [
+                      // 1. Static Layer: Infinite Background Grid
+                      BlocBuilder<SettingsCubit, SettingsState>(
+                        buildWhen: (prev, curr) =>
+                            prev.pattern != curr.pattern ||
+                            prev.panOffset != curr.panOffset ||
+                            prev.zoomLevel != curr.zoomLevel ||
+                            prev.themeMode != curr.themeMode,
+                        builder: (context, settings) {
+                          return RepaintBoundary(
+                            child: CustomPaint(
+                              painter: GridPainter(
+                                pattern: settings.pattern,
+                                panOffset: settings.panOffset,
+                                zoomLevel: settings.zoomLevel,
+                                themeMode: settings.themeMode,
+                              ),
+                              size: Size.infinite,
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
 
-                // 2. History Layer: Completed Strokes
-                BlocBuilder<SettingsCubit, SettingsState>(
-                  buildWhen: (prev, curr) =>
-                      prev.panOffset != curr.panOffset ||
-                      prev.zoomLevel != curr.zoomLevel ||
-                      prev.strokeWidth != curr.strokeWidth ||
-                      prev.strokeColor != curr.strokeColor ||
-                      prev.isEraser != curr.isEraser ||
-                      prev.themeMode != curr.themeMode,
-                  builder: (context, settings) {
-                    return BlocBuilder<DrawingCubit, DrawingState>(
-                      buildWhen: (prev, curr) =>
-                          prev.strokes != curr.strokes ||
-                          prev.isDrawing != curr.isDrawing,
-                      builder: (context, drawingState) {
-                        return ValueListenableBuilder<Offset?>(
-                          valueListenable: _hoverPositionNotifier,
-                          builder: (context, hoverPos, _) {
-                            return ValueListenableBuilder<Stroke?>(
-                              valueListenable: _activeStrokeNotifier,
-                              builder: (context, activeStroke, _) {
-                                return RepaintBoundary(
-                                  child: SizedBox.expand(
-                                    child: CustomPaint(
-                                      painter: WhiteboardPainter(
-                                        strokes: drawingState.strokes,
-                                        activeStroke: activeStroke,
-                                        pattern: BackgroundPattern.none,
-                                        themeMode: settings.themeMode,
-                                        hoverPosition: hoverPos,
-                                        brushSize: settings.strokeWidth,
-                                        brushColor: settings.strokeColor,
-                                        isEraser: settings.isEraser,
-                                        panOffset: settings.panOffset,
-                                        zoomLevel: settings.zoomLevel,
-                                        svgPictures: _svgCache,
-                                      ),
-                                      size: Size.infinite,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
+                      // 2. History Layer: Completed Strokes
+                      BlocBuilder<SettingsCubit, SettingsState>(
+                        buildWhen: (prev, curr) =>
+                            prev.panOffset != curr.panOffset ||
+                            prev.zoomLevel != curr.zoomLevel ||
+                            prev.strokeWidth != curr.strokeWidth ||
+                            prev.strokeColor != curr.strokeColor ||
+                            prev.isEraser != curr.isEraser ||
+                            prev.themeMode != curr.themeMode,
+                        builder: (context, settings) {
+                          return BlocBuilder<DrawingCubit, DrawingState>(
+                            buildWhen: (prev, curr) =>
+                                prev.activeStrokes != curr.activeStrokes ||
+                                prev.isDrawing != curr.isDrawing,
+                            builder: (context, drawingState) {
+                              return ValueListenableBuilder<Offset?>(
+                                valueListenable: _hoverPositionNotifier,
+                                builder: (context, hoverPos, _) {
+                                  return ValueListenableBuilder<Stroke?>(
+                                    valueListenable: _activeStrokeNotifier,
+                                    builder: (context, activeStroke, _) {
+                                      return RepaintBoundary(
+                                        child: SizedBox.expand(
+                                          child: CustomPaint(
+                                            painter: WhiteboardPainter(
+                                              strokes: drawingState.activeStrokes,
+                                              activeStroke: activeStroke,
+                                              pattern: BackgroundPattern.none,
+                                              themeMode: settings.themeMode,
+                                              hoverPosition: hoverPos,
+                                              brushSize: settings.strokeWidth,
+                                              brushColor: settings.strokeColor,
+                                              isEraser: settings.isEraser,
+                                              panOffset: settings.panOffset,
+                                              zoomLevel: settings.zoomLevel,
+                                              selectedStrokeIndex: drawingState.selectedStrokeIndex,
+                                              svgPictures: _svgCache,
+                                            ),
+                                            size: Size.infinite,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
       },
     );
   }
@@ -467,13 +579,14 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     required Offset canvasPoint,
   }) {
     // Keep in sync with icon size in WhiteboardPainter.
-    const iconSize = 48.0;
-    final half = iconSize / 2;
+    const iconBaseSize = 48.0;
     for (int i = strokes.length - 1; i >= 0; i--) {
       final s = strokes[i];
       if (s.type != StrokeType.icon || s.points.isEmpty) continue;
       final c = s.points.first;
-      final rect = Rect.fromLTWH(c.dx - half, c.dy - half, iconSize, iconSize);
+      final size = iconBaseSize * s.scale;
+      final half = size / 2;
+      final rect = Rect.fromLTWH(c.dx - half, c.dy - half, size, size).inflate(8);
       if (rect.contains(canvasPoint)) return i;
     }
     return null;
@@ -487,7 +600,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     final canvasPoint = _toCanvasPoint(settings, localPosition);
     _hoverPositionNotifier.value = canvasPoint;
 
-    final strokes = drawingCubit.state.strokes;
+    final strokes = drawingCubit.activeStrokes;
     final hitIndex = _hitTestIconStrokeIndex(
       strokes: strokes,
       canvasPoint: canvasPoint,
@@ -521,6 +634,46 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     _draggingIconIndex = newIndex;
     _draggingIconDelta = Offset.zero;
     _draggingIconIsNewlyPlaced = true;
+    _activeHandle = _TransformHandle.none;
+    drawingCubit.selectStroke(newIndex);
+  }
+
+  _TransformHandle _hitTestHandles(Offset canvasPoint, Stroke stroke) {
+    const iconBaseSize = 48.0;
+    final size = iconBaseSize * stroke.scale;
+    final rect = Rect.fromCenter(
+      center: stroke.points.first,
+      width: size,
+      height: size,
+    ).inflate(4);
+
+    const hitRadius = 24.0; // Generous hit area for touch
+
+    // Note: handles are NOT rotated with the icon for simpler UX (fixed corners)
+    if ((canvasPoint - rect.topLeft).distance < hitRadius) {
+      return _TransformHandle.topLeft;
+    }
+    if ((canvasPoint - rect.topRight).distance < hitRadius) {
+      return _TransformHandle.topRight;
+    }
+    if ((canvasPoint - rect.bottomLeft).distance < hitRadius) {
+      return _TransformHandle.bottomLeft;
+    }
+    if ((canvasPoint - rect.bottomRight).distance < hitRadius) {
+      return _TransformHandle.bottomRight;
+    }
+
+    final rotationPos = rect.topCenter - const Offset(0, 24);
+    if ((canvasPoint - rotationPos).distance < hitRadius) {
+      return _TransformHandle.rotate;
+    }
+
+    final deletePos = rect.topRight + const Offset(24, -24);
+    if ((canvasPoint - deletePos).distance < hitRadius) {
+      return _TransformHandle.delete;
+    }
+
+    return _TransformHandle.none;
   }
 
   void _autoDropSelectedIcon({

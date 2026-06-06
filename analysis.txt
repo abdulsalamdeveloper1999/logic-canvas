@@ -1,0 +1,5 @@
+Analyzing leetcode_whiteboard...                                
+
+   info • 'purchasePackage' is deprecated and shouldn't be used. Use purchase(PurchaseParams) • lib/data/services/subscription_service.dart:79:38 • deprecated_member_use
+
+1 issue found. (ran in 2.3s)

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
@@ -8,37 +7,29 @@ class UpgradeDialog {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        final isPro = context.read<EntitlementsCubit>().state.isPro;
+        final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E1E),
-          title: const Text('Unlock Pro'),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          title: const Text('Premium Access'),
           content: const Text(
-            'Pro unlocks the full problem library, smart tools (handwriting + shapes), and the full icon library.',
+            'Premium unlocks smart drawing tools (handwriting + shape recognition) and the full architectural icon library.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Not now'),
+              child: const Text('Close'),
             ),
             TextButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Purchases not wired yet (IAP coming next).')),
-                );
+                Navigator.of(dialogContext).pop();
+                // Navigate to paywall if not subscribed
+                if (!isSubscribed) {
+                  // The app-wide guard in main.dart handles this if they refresh, 
+                  // but for immediate feedback we can trigger paywall view here.
+                }
               },
-              child: const Text('View pricing'),
+              child: const Text('Upgrade'),
             ),
-            if (kDebugMode)
-              TextButton(
-                onPressed: () async {
-                  await context.read<EntitlementsCubit>().setPro(!isPro);
-                  if (context.mounted) Navigator.of(dialogContext).pop();
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: isPro ? Colors.orangeAccent : Colors.greenAccent,
-                ),
-                child: Text(isPro ? 'Dev: Switch to Free' : 'Dev: Unlock Pro'),
-              ),
           ],
         );
       },

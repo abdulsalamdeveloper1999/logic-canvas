@@ -1,73 +1,348 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'dart:ui';
 
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
-import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart';
-import 'package:logic_canvas/presentation/cubits/selection/selection_state.dart';
 import 'package:logic_canvas/presentation/widgets/whiteboard_view.dart';
-import 'package:logic_canvas/presentation/widgets/problem_panel.dart';
-import 'package:logic_canvas/domain/entities/problem.dart';
+import 'package:logic_canvas/presentation/widgets/board_panel.dart';
+import 'package:logic_canvas/presentation/cubits/drawing/drawing_state.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:logic_canvas/presentation/widgets/icon_picker_sheet.dart';
 import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
+import 'package:logic_canvas/core/injection.dart';
+import 'package:logic_canvas/data/services/export_service.dart';
 import 'package:logic_canvas/presentation/widgets/upgrade_dialog.dart';
+import 'package:logic_canvas/data/datasources/static_problem_data.dart';
+import 'package:logic_canvas/domain/entities/problem.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _isDescriptionExpanded = true;
 
   @override
   Widget build(BuildContext context) {
     final orientation = MediaQuery.of(context).orientation;
     final sidebarWidth = orientation == Orientation.landscape ? 350.0 : 280.0;
-    final isPro = context.select((EntitlementsCubit c) => c.state.isPro);
+    final isSubscribed = context.select(
+      (EntitlementsCubit c) => c.state.isSubscribed,
+    );
 
     return Scaffold(
-      backgroundColor: Colors.black,
       body: BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, settings) {
-          return BlocBuilder<SelectionCubit, SelectionState>(
-            builder: (context, selection) {
-              final selectedProblem = selection.selectedProblem;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: const WhiteboardView(),
+              ),
 
-              return Stack(
-                children: [
-                   const Positioned.fill(child: WhiteboardView()),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildTopBar(context, isSubscribed),
+              ),
 
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: _buildTopBar(context, selectedProblem, isPro),
-                  ),
+              _buildSidebar(context, settings, sidebarWidth),
 
-                  if (selectedProblem != null)
-                    Positioned(
-                      top: 100,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: _buildProblemBadge(context, selectedProblem),
-                      ),
-                    ),
+              _buildComprehensiveToolbar(context, settings, orientation),
 
-                  _buildSidebar(context, settings, sidebarWidth),
-
-                  _buildComprehensiveToolbar(context, settings, orientation),
-                ],
-              );
-            },
+              Positioned(
+                top: 90,
+                right: 20,
+                child: _buildProblemDescriptionPanel(context),
+              ),
+            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildComprehensiveToolbar(BuildContext context, SettingsState settings, Orientation orientation) {
+  Widget _buildProblemDescriptionPanel(BuildContext context) {
+    return BlocBuilder<DrawingCubit, DrawingState>(
+      builder: (context, state) {
+        final problemId = state.boardProblems[state.activeBoardId];
+        if (problemId == null) return const SizedBox.shrink();
+
+        final problem = ProblemData.paretoProblems.firstWhere(
+          (p) => p.id == problemId,
+          orElse: () =>
+              ProblemData.starterPack.firstWhere((p) => p.id == problemId),
+        );
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutQuart,
+          width: _isDescriptionExpanded ? 320 : 60,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              GestureDetector(
+                onTap: () => setState(
+                  () => _isDescriptionExpanded = !_isDescriptionExpanded,
+                ),
+                child: Container(
+                  height: 44,
+                  width: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    _isDescriptionExpanded
+                        ? Icons.close_rounded
+                        : Icons.menu_book_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+              if (_isDescriptionExpanded) ...[
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getDifficultyColor(
+                                      problem.difficulty,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    problem.difficulty.name.toUpperCase(),
+                                    style: TextStyle(
+                                      color: _getDifficultyColor(
+                                        problem.difficulty,
+                                      ),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  problem.category,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              problem.title,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              problem.description ??
+                                  'No description available.',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                            if (problem.examples.isNotEmpty) ...[
+                              const SizedBox(height: 24),
+                               Text(
+                                "EXAMPLES",
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...problem.examples.map(
+                                (ex) => _buildExampleItem(ex),
+                              ),
+                            ],
+                            if (problem.hints.isNotEmpty) ...[
+                              const SizedBox(height: 24),
+                               Text(
+                                "HINTS",
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...problem.hints.asMap().entries.map(
+                                (entry) =>
+                                    _buildHintItem(entry.key + 1, entry.value),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExampleItem(ProblemExample ex) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildExampleRow("Input", ex.input),
+          const SizedBox(height: 8),
+          _buildExampleRow("Output", ex.output),
+          if (ex.explanation != null) ...[
+            const SizedBox(height: 8),
+            _buildExampleRow("Explanation", ex.explanation!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExampleRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            "$label:",
+            style: const TextStyle(
+              color: Colors.blueAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              fontSize: 11,
+              fontFamily: 'Courier',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHintItem(int index, String hint) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orangeAccent.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "H$index",
+            style: const TextStyle(
+              color: Colors.orangeAccent,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hint,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getDifficultyColor(Difficulty difficulty) {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return Colors.greenAccent;
+      case Difficulty.medium:
+        return Colors.orangeAccent;
+      case Difficulty.hard:
+        return Colors.redAccent;
+    }
+  }
+
+  Widget _buildComprehensiveToolbar(
+    BuildContext context,
+    SettingsState settings,
+    Orientation orientation,
+  ) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -88,7 +363,7 @@ class HomePage extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _buildSelectedIconPreview(context, settings),
                 ),
-              
+
               // Main Drawing & Styling Bar (Lower Row)
               _buildMainIntegratedBar(context, settings),
             ],
@@ -99,7 +374,10 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildIntelligenceRow(BuildContext context, SettingsState settings) {
-    final isPro = context.select((EntitlementsCubit c) => c.state.isPro);
+    final isSubscribed = context.select(
+      (EntitlementsCubit c) => c.state.isSubscribed,
+    );
+    // final selectedProblem = null; // We are moving away from problem-locked boards
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -107,43 +385,63 @@ class HomePage extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               // AI Intelligence
               _smallToggleButton(
-                context, 
-                Icons.draw_rounded, 
-                () => isPro
+                context,
+                Icons.draw_rounded,
+                () => isSubscribed
                     ? context.read<SettingsCubit>().toggleShapeDetection()
                     : UpgradeDialog.show(context),
-                isPro && settings.enableShapeDetection, 
+                isSubscribed && settings.enableShapeDetection,
                 tooltip: "Shape Detector",
               ),
               _smallToggleButton(
-                context, 
-                Icons.text_fields_rounded, 
-                () => isPro
-                    ? context.read<SettingsCubit>().toggleHandwritingRecognition()
+                context,
+                Icons.text_fields_rounded,
+                () => isSubscribed
+                    ? context
+                          .read<SettingsCubit>()
+                          .toggleHandwritingRecognition()
                     : UpgradeDialog.show(context),
-                isPro && settings.enableHandwritingRecognition, 
+                isSubscribed && settings.enableHandwritingRecognition,
                 tooltip: "Paint to Text (Handwriting)",
               ),
 
               _divider(),
 
               // Zoom Controls
-              _smallIconButton(context, Icons.zoom_out_rounded, () => context.read<SettingsCubit>().setZoom(settings.zoomLevel - 0.2), tooltip: "Zoom Out"),
-              _smallIconButton(context, Icons.zoom_in_rounded, () => context.read<SettingsCubit>().setZoom(settings.zoomLevel + 0.2), tooltip: "Zoom In"),
               _smallIconButton(
-                context, 
-                Icons.center_focus_strong_outlined, 
-                () => context.read<SettingsCubit>().resetTransform(), 
-                color: (settings.panOffset != Offset.zero || settings.zoomLevel != 1.0) ? Colors.blueAccent : null,
+                context,
+                Icons.zoom_out_rounded,
+                () => context.read<SettingsCubit>().setZoom(
+                  settings.zoomLevel - 0.2,
+                ),
+                tooltip: "Zoom Out",
+              ),
+              _smallIconButton(
+                context,
+                Icons.zoom_in_rounded,
+                () => context.read<SettingsCubit>().setZoom(
+                  settings.zoomLevel + 0.2,
+                ),
+                tooltip: "Zoom In",
+              ),
+              _smallIconButton(
+                context,
+                Icons.center_focus_strong_outlined,
+                () => context.read<SettingsCubit>().resetTransform(),
+                color:
+                    (settings.panOffset != Offset.zero ||
+                        settings.zoomLevel != 1.0)
+                    ? Colors.blueAccent
+                    : null,
                 tooltip: "Reset View",
               ),
 
@@ -190,7 +488,7 @@ class HomePage extends StatelessWidget {
 
     if (shouldClear == true && context.mounted) {
       HapticFeedback.heavyImpact();
-      context.read<DrawingCubit>().clear();
+      context.read<DrawingCubit>().clear(); // Fixed method call
     }
   }
 
@@ -202,43 +500,68 @@ class HomePage extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+            color: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(35),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 10)),
+              BoxShadow(
+                color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
             ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Core Tools
-              _toolbarButton(context, Icons.edit_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.pen), settings.toolMode == ToolMode.pen, tooltip: "Pen"),
-              _toolbarButton(context, Icons.pan_tool_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.hand), settings.toolMode == ToolMode.hand, tooltip: "Hand (Pan)"),
-              _toolbarButton(context, Icons.device_hub_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.connector), settings.toolMode == ToolMode.connector, tooltip: "Connector"),
-              _toolbarButton(context, Icons.category_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.diagram), settings.toolMode == ToolMode.diagram, tooltip: "Diagram Icons"),
-              _toolbarButton(context, Icons.auto_fix_high_rounded, () => context.read<SettingsCubit>().setToolMode(ToolMode.eraser), settings.toolMode == ToolMode.eraser, tooltip: "Eraser"),
-              
+              _toolbarButton(
+                context,
+                Icons.edit_rounded,
+                () => context.read<SettingsCubit>().setToolMode(ToolMode.pen),
+                settings.toolMode == ToolMode.pen,
+                tooltip: "Pen",
+              ),
+              _toolbarButton(
+                context,
+                Icons.pan_tool_rounded,
+                () => context.read<SettingsCubit>().setToolMode(ToolMode.hand),
+                settings.toolMode == ToolMode.hand,
+                tooltip: "Hand (Pan)",
+              ),
+              _toolbarButton(
+                context,
+                Icons.device_hub_rounded,
+                () => context.read<SettingsCubit>().setToolMode(
+                  ToolMode.connector,
+                ),
+                settings.toolMode == ToolMode.connector,
+                tooltip: "Connector",
+              ),
+              _toolbarButton(
+                context,
+                Icons.category_rounded,
+                () =>
+                    context.read<SettingsCubit>().setToolMode(ToolMode.diagram),
+                settings.toolMode == ToolMode.diagram,
+                tooltip: "Diagram Icons",
+              ),
+              _toolbarButton(
+                context,
+                Icons.auto_fix_high_rounded,
+                () =>
+                    context.read<SettingsCubit>().setToolMode(ToolMode.eraser),
+                settings.toolMode == ToolMode.eraser,
+                tooltip: "Eraser",
+              ),
+
               _divider(),
 
-              // Quick Presets
-              _presetButton(context, Icons.edit_note, 2.0, settings.strokeWidth, "Pencil"),
-              _presetButton(context, Icons.edit, 5.0, settings.strokeWidth, "Pen"),
-              _presetButton(context, Icons.brush_rounded, 12.0, settings.strokeWidth, "Brush"),
-              _presetButton(context, Icons.format_paint_rounded, 24.0, settings.strokeWidth, "Paint"),
+              _buildToolSpecificControls(context, settings),
 
-              _divider(),
-
-              // Styling Controls
-              _buildColorButton(context, settings.strokeColor),
-              _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, settings.isEraser),
-              _buildWidthSlider(context, settings.strokeWidth),
-
-              _divider(),
-
-              // History
-              _toolbarButton(context, Icons.undo_rounded, () => context.read<DrawingCubit>().undo(), false, tooltip: "Undo"),
-              _toolbarButton(context, Icons.redo_rounded, () => context.read<DrawingCubit>().redo(), false, tooltip: "Redo"),
+              // Styled Preview (Empty space or divider could go here)
             ],
           ),
         ),
@@ -246,7 +569,10 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildSelectedIconPreview(BuildContext context, SettingsState settings) {
+  Widget _buildSelectedIconPreview(
+    BuildContext context,
+    SettingsState settings,
+  ) {
     final iconPath = settings.selectedIconPath;
     return GestureDetector(
       onTap: () => _showIconPicker(context, settings),
@@ -259,20 +585,44 @@ class HomePage extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.blueAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: Colors.blueAccent.withValues(alpha: 0.3),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Reduce preview icon size (~1.2x smaller).
-                if (iconPath != null) SvgPicture.asset(iconPath, width: 20, height: 20)
-                else const Icon(Icons.search_rounded, size: 20, color: Colors.blueAccent),
+                if (iconPath != null)
+                  SvgPicture.asset(iconPath, width: 20, height: 20)
+                else
+                  const Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: Colors.blueAccent,
+                  ),
                 const SizedBox(width: 8),
                 Text(
-                  iconPath?.split('/').last.split('.').first.replaceAll('-', ' ').toUpperCase() ?? "SEARCH CLOUD ICONS",
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.blueAccent, letterSpacing: 1.0),
+                  iconPath
+                          ?.split('/')
+                          .last
+                          .split('.')
+                          .first
+                          .replaceAll('-', ' ')
+                          .toUpperCase() ??
+                      "SEARCH CLOUD ICONS",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.blueAccent,
+                    letterSpacing: 1.0,
+                  ),
                 ),
-                const Icon(Icons.arrow_right_rounded, size: 20, color: Colors.blueAccent),
+                const Icon(
+                  Icons.arrow_right_rounded,
+                  size: 20,
+                  color: Colors.blueAccent,
+                ),
               ],
             ),
           ),
@@ -282,7 +632,7 @@ class HomePage extends StatelessWidget {
   }
 
   void _showIconPicker(BuildContext context, SettingsState settings) {
-    final isPro = context.read<EntitlementsCubit>().state.isPro;
+    final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -302,7 +652,7 @@ class HomePage extends StatelessWidget {
                   maxHeight: size.height * 0.8,
                 ),
                 child: IconPickerSheet(
-                  isPro: isPro,
+                  isSubscribed: isSubscribed,
                   selectedIconPath: settings.selectedIconPath,
                   onIconSelected: (path) {
                     context.read<SettingsCubit>().setSelectedIconPath(path);
@@ -314,7 +664,10 @@ class HomePage extends StatelessWidget {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curve = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
         return FadeTransition(
           opacity: curve,
           child: ScaleTransition(
@@ -326,7 +679,11 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildSidebar(BuildContext context, SettingsState settings, double width) {
+  Widget _buildSidebar(
+    BuildContext context,
+    SettingsState settings,
+    double width,
+  ) {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeInOutQuart,
@@ -338,28 +695,52 @@ class HomePage extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            left: 0, top: 0, bottom: 0, width: width,
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: width,
             child: ClipRRect(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                    border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.9),
+                    border: Border(
+                      right: BorderSide(
+                        color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                      ),
+                    ),
                   ),
-                  child: const ProblemPanel(),
+                  child: const BoardPanel(),
                 ),
               ),
             ),
           ),
           Positioned(
-            left: width + 10, top: 100,
+            left: width + 10,
+            top: 100,
             child: GestureDetector(
               onTap: () => context.read<SettingsCubit>().toggleSidebar(),
               child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-                child: Icon(settings.showSidebar ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, color: Colors.blueAccent),
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Icon(
+                  settings.showSidebar
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded,
+                  color: Colors.blueAccent,
+                ),
               ),
             ),
           ),
@@ -368,27 +749,84 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildTopBar(BuildContext context, Problem? selectedProblem, bool isPro) {
+  Widget _buildTopBar(BuildContext context, bool isSubscribed) {
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4), border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
+            border: Border(
+              bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.05)),
+            ),
+          ),
           child: SafeArea(
             bottom: false,
-              child: Row(
+            child: Row(
               children: [
-                const Text("LogicCanvas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.8)),
-                const Spacer(),
-                Text(
-                  isPro ? "Pro" : "Free",
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.white24,
-                    fontWeight: FontWeight.bold,
+                const Text(
+                  "LogicCanvas",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.8,
                   ),
                 ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.blueAccent.withValues(alpha: 0.2),
+                        Colors.blueAccent.withValues(alpha: 0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.blueAccent.withValues(alpha: 0.3),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blueAccent.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    "PREMIUM",
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.blueAccent,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // History (Undo/Redo)
+                _topBarIconButton(
+                  context,
+                  Icons.undo_rounded,
+                  () => context.read<DrawingCubit>().undo(),
+                  tooltip: "Undo",
+                ),
+                const SizedBox(width: 4),
+                _topBarIconButton(
+                  context,
+                  Icons.redo_rounded,
+                  () => context.read<DrawingCubit>().redo(),
+                  tooltip: "Redo",
+                ),
+                const SizedBox(width: 16),
+
+                // Export Button
+                _buildExportButton(context),
               ],
             ),
           ),
@@ -397,28 +835,88 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildProblemBadge(BuildContext context, Problem problem) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+  Widget _topBarIconButton(
+    BuildContext context,
+    IconData icon,
+    VoidCallback? onPressed, {
+    String? tooltip,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: IconButton(
+        icon: Icon(
+          icon,
+          color:
+              onPressed == null
+                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+          size: 22,
+        ),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        splashRadius: 24,
+        hoverColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
+      ),
+    );
+  }
+
+  Widget _buildExportButton(BuildContext context) {
+    final exportService = getIt<ExportService>();
+    final activeBoardId = context.read<DrawingCubit>().state.activeBoardId;
+
+    return PopupMenuButton<String>(
+      onSelected: (value) async {
+        if (value == 'png') {
+          await exportService.exportToPng(activeBoardId);
+        } else if (value == 'pdf') {
+          await exportService.exportToPdf(activeBoardId);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.ios_share_rounded, size: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+            SizedBox(width: 10),
+            Text(
+              "EXPORT",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'png',
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.lightbulb_rounded, size: 18, color: _getDifficultyColor(problem.difficulty)),
-              const SizedBox(width: 10),
-              Text(problem.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(width: 15),
-              Container(width: 1, height: 16, color: Colors.white.withValues(alpha: 0.1)),
-              const SizedBox(width: 15),
-              Text(problem.difficulty.name.toUpperCase(), style: TextStyle(color: _getDifficultyColor(problem.difficulty), fontSize: 13, fontWeight: FontWeight.w900)),
+              Icon(Icons.image_rounded, color: Colors.blueAccent),
+              SizedBox(width: 12),
+              Text('Export as PNG'),
             ],
           ),
         ),
-      ),
+        const PopupMenuItem(
+          value: 'pdf',
+          child: Row(
+            children: [
+              Icon(Icons.picture_as_pdf_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 12),
+              Text('Export as PDF'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -428,23 +926,50 @@ class HomePage extends StatelessWidget {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            backgroundColor: const Color(0xFF1E1E1E),
+            backgroundColor: Theme.of(context).colorScheme.surface,
             title: const Text('Brush Color'),
-            content: SingleChildScrollView(child: ColorPicker(pickerColor: currentColor, onColorChanged: (color) => context.read<SettingsCubit>().setStrokeColor(color))),
-            actions: [TextButton(child: const Text('Done'), onPressed: () => Navigator.of(context).pop())],
+            content: SingleChildScrollView(
+              child: ColorPicker(
+                pickerColor: currentColor,
+                onColorChanged: (color) =>
+                    context.read<SettingsCubit>().setStrokeColor(color),
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Done'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
         );
       },
       child: Container(
-        width: 32, height: 32, margin: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(color: currentColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), boxShadow: [BoxShadow(color: currentColor.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)]),
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: currentColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: currentColor.withValues(alpha: 0.4),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildWidthSlider(BuildContext context, double currentWidth) {
-    const minWidth = 1.0;
-    const maxWidth = 50.0; // Must cover preset values (e.g. 24.0) and persisted settings.
+  Widget _buildWidthSlider(
+    BuildContext context,
+    double currentWidth, {
+    double minWidth = 1.0,
+    double maxWidth = 50.0,
+  }) {
     final safeWidth = currentWidth.clamp(minWidth, maxWidth);
     return SizedBox(
       width: 80,
@@ -452,20 +977,60 @@ class HomePage extends StatelessWidget {
         value: safeWidth,
         min: minWidth,
         max: maxWidth,
-        onChanged: (value) => context.read<SettingsCubit>().setStrokeWidth(value),
+        activeColor: Theme.of(context).colorScheme.primary,
+        inactiveColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
+        onChanged: (value) =>
+            context.read<SettingsCubit>().setStrokeWidth(value),
       ),
     );
   }
 
-  Widget _buildBrushSizePreview(double strokeWidth, Color strokeColor, bool isEraser) {
-    final safe = strokeWidth.clamp(1.0, 50.0);
-    // Toolbar preview should stay compact; map to 6..20 px diameter.
-    final diameter = (6.0 + (safe - 1.0) * (14.0 / 49.0)).clamp(6.0, 20.0);
+  Widget _buildToolSpecificControls(BuildContext context, SettingsState settings) {
+    if (settings.isEraser) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _presetButton(context, Icons.circle, 20.0, settings.strokeWidth, "Small Eraser"),
+          _presetButton(context, Icons.circle, 40.0, settings.strokeWidth, "Medium Eraser"),
+          _presetButton(context, Icons.circle, 60.0, settings.strokeWidth, "Large Eraser"),
+          _presetButton(context, Icons.circle, 80.0, settings.strokeWidth, "Huge Eraser"),
+          _divider(),
+          _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, true),
+          _buildWidthSlider(context, settings.strokeWidth, maxWidth: 100.0),
+        ],
+      );
+    } else {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _presetButton(context, Icons.edit_note, 2.0, settings.strokeWidth, "Pencil"),
+          _presetButton(context, Icons.edit, 5.0, settings.strokeWidth, "Pen"),
+          _presetButton(context, Icons.brush_rounded, 12.0, settings.strokeWidth, "Brush"),
+          _presetButton(context, Icons.format_paint_rounded, 24.0, settings.strokeWidth, "Paint"),
+          _divider(),
+          _buildColorButton(context, settings.strokeColor),
+          _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, false),
+          _buildWidthSlider(context, settings.strokeWidth, maxWidth: 50.0),
+        ],
+      );
+    }
+  }
+
+  Widget _buildBrushSizePreview(
+    double strokeWidth,
+    Color strokeColor,
+    bool isEraser,
+  ) {
+    final maxRange = isEraser ? 100.0 : 50.0;
+    final safe = strokeWidth.clamp(1.0, maxRange);
+    final diameter = (6.0 + (safe - 1.0) * (14.0 / (maxRange - 1.0))).clamp(6.0, 20.0);
 
     final fill = isEraser
-        ? Colors.white.withValues(alpha: 0.12)
+        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12)
         : strokeColor.withValues(alpha: 0.85);
-    final border = isEraser ? Colors.white54 : Colors.white24;
+    final border = isEraser 
+        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54)
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -476,9 +1041,9 @@ class HomePage extends StatelessWidget {
         height: 26,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.04),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08)),
         ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -497,55 +1062,108 @@ class HomePage extends StatelessWidget {
 
   Widget _divider() => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.1)),
+    child: Container(
+      width: 1,
+      height: 30,
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+    ),
   );
 
-  Widget _toolbarButton(BuildContext context, IconData icon, VoidCallback onPressed, bool active, {Color? color, String? tooltip}) {
+  Widget _toolbarButton(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onPressed,
+    bool active, {
+    Color? color,
+    String? tooltip,
+  }) {
     return Tooltip(
       message: tooltip ?? "",
       child: IconButton(
-        onPressed: () { HapticFeedback.lightImpact(); onPressed(); },
-        icon: Icon(icon), color: active ? Colors.blueAccent : (color ?? Colors.white.withValues(alpha: 0.6)), iconSize: 28,
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          onPressed();
+        },
+        icon: Icon(icon),
+        color: active
+            ? Theme.of(context).colorScheme.primary
+            : (color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+        iconSize: 28,
       ),
     );
   }
 
-  Widget _presetButton(BuildContext context, IconData icon, double width, double currentWidth, String label) {
-    final bool active = (currentWidth - width).abs() < 0.1;
-    return Tooltip(
-      message: label,
+  Widget _presetButton(
+    BuildContext context,
+    IconData icon,
+    double size,
+    double currentSize,
+    String tooltip,
+  ) {
+    final isActive = (size - currentSize).abs() < 0.1;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: isActive ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: IconButton(
-        onPressed: () { HapticFeedback.mediumImpact(); context.read<SettingsCubit>().setBrushPreset(width); },
-        icon: Icon(icon), color: active ? Colors.blueAccent : Colors.white.withValues(alpha: 0.4), iconSize: 22,
+        icon: Icon(
+          icon,
+          size: 18 + (size / 10).clamp(0, 10),
+          color: isActive ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+        ),
+        onPressed: () => context.read<SettingsCubit>().setStrokeWidth(size),
+        tooltip: tooltip,
+        splashRadius: 20,
       ),
     );
   }
 
-  Widget _smallIconButton(BuildContext context, IconData icon, VoidCallback onPressed, {Color? color, String? tooltip}) {
+  Widget _smallIconButton(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onPressed, {
+    Color? color,
+    String? tooltip,
+  }) {
     return Tooltip(
       message: tooltip ?? "",
       child: IconButton(
-        onPressed: () { HapticFeedback.lightImpact(); onPressed(); },
-        icon: Icon(icon), color: color ?? Colors.white.withValues(alpha: 0.6), iconSize: 20, constraints: const BoxConstraints(), padding: const EdgeInsets.all(8),
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          onPressed();
+        },
+        icon: Icon(icon),
+        color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        iconSize: 20,
+        constraints: const BoxConstraints(),
+        padding: const EdgeInsets.all(8),
       ),
     );
   }
 
-  Widget _smallToggleButton(BuildContext context, IconData icon, VoidCallback onPressed, bool active, {String? tooltip}) {
+  Widget _smallToggleButton(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onPressed,
+    bool active, {
+    String? tooltip,
+  }) {
     return Tooltip(
       message: tooltip ?? "",
       child: IconButton(
-        onPressed: () { HapticFeedback.mediumImpact(); onPressed(); },
-        icon: Icon(icon), color: active ? Colors.blueAccent : Colors.white.withValues(alpha: 0.4), iconSize: 20, constraints: const BoxConstraints(), padding: const EdgeInsets.all(8),
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          onPressed();
+        },
+        icon: Icon(icon),
+        color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+        iconSize: 20,
+        constraints: const BoxConstraints(),
+        padding: const EdgeInsets.all(8),
       ),
     );
-  }
-
-  Color _getDifficultyColor(Difficulty difficulty) {
-    switch (difficulty) {
-      case Difficulty.easy: return Colors.greenAccent;
-      case Difficulty.medium: return Colors.orangeAccent;
-      case Difficulty.hard: return Colors.redAccent;
-    }
   }
 }

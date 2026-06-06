@@ -19,7 +19,8 @@ final _privateConstructorUsedError = UnsupportedError(
 mixin _$SettingsState {
   ThemeMode get themeMode => throw _privateConstructorUsedError;
   Color get strokeColor => throw _privateConstructorUsedError;
-  double get strokeWidth => throw _privateConstructorUsedError;
+  double get penStrokeWidth => throw _privateConstructorUsedError;
+  double get eraserStrokeWidth => throw _privateConstructorUsedError;
   bool get isEraser => throw _privateConstructorUsedError;
   BackgroundPattern get pattern => throw _privateConstructorUsedError;
   bool get showSidebar => throw _privateConstructorUsedError;
@@ -29,12 +30,12 @@ mixin _$SettingsState {
   bool get autoHideSidebar => throw _privateConstructorUsedError;
   bool get showToolbar => throw _privateConstructorUsedError;
   bool get enableShapeDetection => throw _privateConstructorUsedError;
-  bool get enableHandwritingRecognition =>
-      throw _privateConstructorUsedError; // Ephemeral counter used to trigger "drop selected icon onto board" events.
-  // Intentionally not persisted in Hive.
+  bool get enableHandwritingRecognition => throw _privateConstructorUsedError;
   int get iconSelectionNonce => throw _privateConstructorUsedError;
   String? get selectedIconPath => throw _privateConstructorUsedError;
   Offset? get hoverPosition => throw _privateConstructorUsedError;
+  bool get isICloudSyncEnabled => throw _privateConstructorUsedError;
+  bool get isICloudQuotaExceeded => throw _privateConstructorUsedError;
 
   /// Create a copy of SettingsState
   /// with the given fields replaced by the non-null parameter values.
@@ -53,7 +54,8 @@ abstract class $SettingsStateCopyWith<$Res> {
   $Res call({
     ThemeMode themeMode,
     Color strokeColor,
-    double strokeWidth,
+    double penStrokeWidth,
+    double eraserStrokeWidth,
     bool isEraser,
     BackgroundPattern pattern,
     bool showSidebar,
@@ -67,6 +69,8 @@ abstract class $SettingsStateCopyWith<$Res> {
     int iconSelectionNonce,
     String? selectedIconPath,
     Offset? hoverPosition,
+    bool isICloudSyncEnabled,
+    bool isICloudQuotaExceeded,
   });
 }
 
@@ -87,7 +91,8 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
   $Res call({
     Object? themeMode = null,
     Object? strokeColor = null,
-    Object? strokeWidth = null,
+    Object? penStrokeWidth = null,
+    Object? eraserStrokeWidth = null,
     Object? isEraser = null,
     Object? pattern = null,
     Object? showSidebar = null,
@@ -101,6 +106,8 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
     Object? iconSelectionNonce = null,
     Object? selectedIconPath = freezed,
     Object? hoverPosition = freezed,
+    Object? isICloudSyncEnabled = null,
+    Object? isICloudQuotaExceeded = null,
   }) {
     return _then(
       _value.copyWith(
@@ -112,9 +119,13 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
                 ? _value.strokeColor
                 : strokeColor // ignore: cast_nullable_to_non_nullable
                       as Color,
-            strokeWidth: null == strokeWidth
-                ? _value.strokeWidth
-                : strokeWidth // ignore: cast_nullable_to_non_nullable
+            penStrokeWidth: null == penStrokeWidth
+                ? _value.penStrokeWidth
+                : penStrokeWidth // ignore: cast_nullable_to_non_nullable
+                      as double,
+            eraserStrokeWidth: null == eraserStrokeWidth
+                ? _value.eraserStrokeWidth
+                : eraserStrokeWidth // ignore: cast_nullable_to_non_nullable
                       as double,
             isEraser: null == isEraser
                 ? _value.isEraser
@@ -168,6 +179,14 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
                 ? _value.hoverPosition
                 : hoverPosition // ignore: cast_nullable_to_non_nullable
                       as Offset?,
+            isICloudSyncEnabled: null == isICloudSyncEnabled
+                ? _value.isICloudSyncEnabled
+                : isICloudSyncEnabled // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            isICloudQuotaExceeded: null == isICloudQuotaExceeded
+                ? _value.isICloudQuotaExceeded
+                : isICloudQuotaExceeded // ignore: cast_nullable_to_non_nullable
+                      as bool,
           )
           as $Val,
     );
@@ -186,7 +205,8 @@ abstract class _$$SettingsStateImplCopyWith<$Res>
   $Res call({
     ThemeMode themeMode,
     Color strokeColor,
-    double strokeWidth,
+    double penStrokeWidth,
+    double eraserStrokeWidth,
     bool isEraser,
     BackgroundPattern pattern,
     bool showSidebar,
@@ -200,6 +220,8 @@ abstract class _$$SettingsStateImplCopyWith<$Res>
     int iconSelectionNonce,
     String? selectedIconPath,
     Offset? hoverPosition,
+    bool isICloudSyncEnabled,
+    bool isICloudQuotaExceeded,
   });
 }
 
@@ -219,7 +241,8 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
   $Res call({
     Object? themeMode = null,
     Object? strokeColor = null,
-    Object? strokeWidth = null,
+    Object? penStrokeWidth = null,
+    Object? eraserStrokeWidth = null,
     Object? isEraser = null,
     Object? pattern = null,
     Object? showSidebar = null,
@@ -233,6 +256,8 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
     Object? iconSelectionNonce = null,
     Object? selectedIconPath = freezed,
     Object? hoverPosition = freezed,
+    Object? isICloudSyncEnabled = null,
+    Object? isICloudQuotaExceeded = null,
   }) {
     return _then(
       _$SettingsStateImpl(
@@ -244,9 +269,13 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
             ? _value.strokeColor
             : strokeColor // ignore: cast_nullable_to_non_nullable
                   as Color,
-        strokeWidth: null == strokeWidth
-            ? _value.strokeWidth
-            : strokeWidth // ignore: cast_nullable_to_non_nullable
+        penStrokeWidth: null == penStrokeWidth
+            ? _value.penStrokeWidth
+            : penStrokeWidth // ignore: cast_nullable_to_non_nullable
+                  as double,
+        eraserStrokeWidth: null == eraserStrokeWidth
+            ? _value.eraserStrokeWidth
+            : eraserStrokeWidth // ignore: cast_nullable_to_non_nullable
                   as double,
         isEraser: null == isEraser
             ? _value.isEraser
@@ -300,6 +329,14 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
             ? _value.hoverPosition
             : hoverPosition // ignore: cast_nullable_to_non_nullable
                   as Offset?,
+        isICloudSyncEnabled: null == isICloudSyncEnabled
+            ? _value.isICloudSyncEnabled
+            : isICloudSyncEnabled // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        isICloudQuotaExceeded: null == isICloudQuotaExceeded
+            ? _value.isICloudQuotaExceeded
+            : isICloudQuotaExceeded // ignore: cast_nullable_to_non_nullable
+                  as bool,
       ),
     );
   }
@@ -311,7 +348,8 @@ class _$SettingsStateImpl implements _SettingsState {
   const _$SettingsStateImpl({
     required this.themeMode,
     required this.strokeColor,
-    required this.strokeWidth,
+    this.penStrokeWidth = 5.0,
+    this.eraserStrokeWidth = 24.0,
     required this.isEraser,
     required this.pattern,
     required this.showSidebar,
@@ -325,6 +363,8 @@ class _$SettingsStateImpl implements _SettingsState {
     this.iconSelectionNonce = 0,
     this.selectedIconPath,
     this.hoverPosition,
+    this.isICloudSyncEnabled = false,
+    this.isICloudQuotaExceeded = false,
   });
 
   @override
@@ -332,7 +372,11 @@ class _$SettingsStateImpl implements _SettingsState {
   @override
   final Color strokeColor;
   @override
-  final double strokeWidth;
+  @JsonKey()
+  final double penStrokeWidth;
+  @override
+  @JsonKey()
+  final double eraserStrokeWidth;
   @override
   final bool isEraser;
   @override
@@ -360,8 +404,6 @@ class _$SettingsStateImpl implements _SettingsState {
   @override
   @JsonKey()
   final bool enableHandwritingRecognition;
-  // Ephemeral counter used to trigger "drop selected icon onto board" events.
-  // Intentionally not persisted in Hive.
   @override
   @JsonKey()
   final int iconSelectionNonce;
@@ -369,10 +411,16 @@ class _$SettingsStateImpl implements _SettingsState {
   final String? selectedIconPath;
   @override
   final Offset? hoverPosition;
+  @override
+  @JsonKey()
+  final bool isICloudSyncEnabled;
+  @override
+  @JsonKey()
+  final bool isICloudQuotaExceeded;
 
   @override
   String toString() {
-    return 'SettingsState(themeMode: $themeMode, strokeColor: $strokeColor, strokeWidth: $strokeWidth, isEraser: $isEraser, pattern: $pattern, showSidebar: $showSidebar, toolMode: $toolMode, zoomLevel: $zoomLevel, panOffset: $panOffset, autoHideSidebar: $autoHideSidebar, showToolbar: $showToolbar, enableShapeDetection: $enableShapeDetection, enableHandwritingRecognition: $enableHandwritingRecognition, iconSelectionNonce: $iconSelectionNonce, selectedIconPath: $selectedIconPath, hoverPosition: $hoverPosition)';
+    return 'SettingsState(themeMode: $themeMode, strokeColor: $strokeColor, penStrokeWidth: $penStrokeWidth, eraserStrokeWidth: $eraserStrokeWidth, isEraser: $isEraser, pattern: $pattern, showSidebar: $showSidebar, toolMode: $toolMode, zoomLevel: $zoomLevel, panOffset: $panOffset, autoHideSidebar: $autoHideSidebar, showToolbar: $showToolbar, enableShapeDetection: $enableShapeDetection, enableHandwritingRecognition: $enableHandwritingRecognition, iconSelectionNonce: $iconSelectionNonce, selectedIconPath: $selectedIconPath, hoverPosition: $hoverPosition, isICloudSyncEnabled: $isICloudSyncEnabled, isICloudQuotaExceeded: $isICloudQuotaExceeded)';
   }
 
   @override
@@ -384,8 +432,10 @@ class _$SettingsStateImpl implements _SettingsState {
                 other.themeMode == themeMode) &&
             (identical(other.strokeColor, strokeColor) ||
                 other.strokeColor == strokeColor) &&
-            (identical(other.strokeWidth, strokeWidth) ||
-                other.strokeWidth == strokeWidth) &&
+            (identical(other.penStrokeWidth, penStrokeWidth) ||
+                other.penStrokeWidth == penStrokeWidth) &&
+            (identical(other.eraserStrokeWidth, eraserStrokeWidth) ||
+                other.eraserStrokeWidth == eraserStrokeWidth) &&
             (identical(other.isEraser, isEraser) ||
                 other.isEraser == isEraser) &&
             (identical(other.pattern, pattern) || other.pattern == pattern) &&
@@ -414,15 +464,20 @@ class _$SettingsStateImpl implements _SettingsState {
             (identical(other.selectedIconPath, selectedIconPath) ||
                 other.selectedIconPath == selectedIconPath) &&
             (identical(other.hoverPosition, hoverPosition) ||
-                other.hoverPosition == hoverPosition));
+                other.hoverPosition == hoverPosition) &&
+            (identical(other.isICloudSyncEnabled, isICloudSyncEnabled) ||
+                other.isICloudSyncEnabled == isICloudSyncEnabled) &&
+            (identical(other.isICloudQuotaExceeded, isICloudQuotaExceeded) ||
+                other.isICloudQuotaExceeded == isICloudQuotaExceeded));
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     runtimeType,
     themeMode,
     strokeColor,
-    strokeWidth,
+    penStrokeWidth,
+    eraserStrokeWidth,
     isEraser,
     pattern,
     showSidebar,
@@ -436,7 +491,9 @@ class _$SettingsStateImpl implements _SettingsState {
     iconSelectionNonce,
     selectedIconPath,
     hoverPosition,
-  );
+    isICloudSyncEnabled,
+    isICloudQuotaExceeded,
+  ]);
 
   /// Create a copy of SettingsState
   /// with the given fields replaced by the non-null parameter values.
@@ -451,7 +508,8 @@ abstract class _SettingsState implements SettingsState {
   const factory _SettingsState({
     required final ThemeMode themeMode,
     required final Color strokeColor,
-    required final double strokeWidth,
+    final double penStrokeWidth,
+    final double eraserStrokeWidth,
     required final bool isEraser,
     required final BackgroundPattern pattern,
     required final bool showSidebar,
@@ -465,6 +523,8 @@ abstract class _SettingsState implements SettingsState {
     final int iconSelectionNonce,
     final String? selectedIconPath,
     final Offset? hoverPosition,
+    final bool isICloudSyncEnabled,
+    final bool isICloudQuotaExceeded,
   }) = _$SettingsStateImpl;
 
   @override
@@ -472,7 +532,9 @@ abstract class _SettingsState implements SettingsState {
   @override
   Color get strokeColor;
   @override
-  double get strokeWidth;
+  double get penStrokeWidth;
+  @override
+  double get eraserStrokeWidth;
   @override
   bool get isEraser;
   @override
@@ -492,14 +554,17 @@ abstract class _SettingsState implements SettingsState {
   @override
   bool get enableShapeDetection;
   @override
-  bool get enableHandwritingRecognition; // Ephemeral counter used to trigger "drop selected icon onto board" events.
-  // Intentionally not persisted in Hive.
+  bool get enableHandwritingRecognition;
   @override
   int get iconSelectionNonce;
   @override
   String? get selectedIconPath;
   @override
   Offset? get hoverPosition;
+  @override
+  bool get isICloudSyncEnabled;
+  @override
+  bool get isICloudQuotaExceeded;
 
   /// Create a copy of SettingsState
   /// with the given fields replaced by the non-null parameter values.

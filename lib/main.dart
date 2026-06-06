@@ -8,44 +8,45 @@ import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
 import 'package:logic_canvas/presentation/cubits/progress/progress_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_state.dart';
 import 'package:logic_canvas/presentation/pages/home/home_page.dart';
+import 'package:logic_canvas/presentation/pages/subscription/paywall_page.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+
+import 'presentation/cubits/drawing/drawing_state.dart';
 
 void main() async {
-  // We put this first to ensure it's logged to console ASAP
-  print('--- FLUTTER STARTING ---');
-  WidgetsFlutterBinding.ensureInitialized();
-  print('--- BINDING INITIALIZED ---');
-  
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
   // Custom Error Handling for Release Mode diagnosis
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     debugPrint('CRITICAL_FLUTTER_ERROR: ${details.exception}');
   };
 
-  debugPrint('🚀 BUILD_SYNC_TEST_ALPHA: Code is LIVE');
-
   try {
     debugPrint('📦 Hive: Initializing...');
     await Hive.initFlutter();
-    
+
     debugPrint('📦 Hive: Opening progress box...');
     await Hive.openBox<bool>('progress');
-    
+
     debugPrint('📦 Hive: Opening settings box...');
     await Hive.openBox('settings');
-    
+
     debugPrint('📦 Hive: Opening drawing box...');
     await Hive.openBox('drawing');
 
     debugPrint('📦 Hive: Opening entitlements box...');
     await Hive.openBox('entitlements');
-    
+
     debugPrint('📦 Hive: Boxes opened successfully');
 
     debugPrint('💉 DI: Configuring dependencies...');
     configureDependencies();
     debugPrint('💉 DI: Dependencies configured');
-    
+
     debugPrint('🚀 App: Running LogicCanvasApp...');
     runApp(const LogicCanvasApp());
   } catch (e) {
@@ -69,7 +70,7 @@ class LogicCanvasApp extends StatelessWidget {
         BlocProvider(create: (_) => getIt<SettingsCubit>()),
         BlocProvider(create: (_) => getIt<ProgressCubit>()),
         BlocProvider(create: (_) => getIt<SelectionCubit>()),
-        BlocProvider(create: (_) => EntitlementsCubit()),
+        BlocProvider(create: (_) => getIt<EntitlementsCubit>()),
       ],
       child: BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, state) {
@@ -93,7 +94,44 @@ class LogicCanvasApp extends StatelessWidget {
               ),
               scaffoldBackgroundColor: const Color(0xFF0F0F0F),
             ),
-            home: const SafeArea(child: HomePage()),
+            home: BlocListener<EntitlementsCubit, EntitlementsState>(
+              listenWhen: (prev, curr) =>
+                  curr.isInitialized && !prev.isInitialized,
+              listener: (context, state) {
+                // We check if DrawingCubit is also loaded
+                if (context.read<DrawingCubit>().state.isLoaded) {
+                  FlutterNativeSplash.remove();
+                }
+              },
+              child: BlocListener<DrawingCubit, DrawingState>(
+                listenWhen: (prev, curr) => curr.isLoaded && !prev.isLoaded,
+                listener: (context, state) {
+                  // We check if EntitlementsCubit is also initialized
+                  if (context.read<EntitlementsCubit>().state.isInitialized) {
+                    FlutterNativeSplash.remove();
+                  }
+                },
+                child: BlocBuilder<EntitlementsCubit, EntitlementsState>(
+                  builder: (context, entState) {
+                    return BlocBuilder<DrawingCubit, DrawingState>(
+                      builder: (context, drawState) {
+                        final bool isReady =
+                            entState.isInitialized && drawState.isLoaded;
+
+                        if (!isReady) {
+                          return const Scaffold(backgroundColor: Colors.black);
+                        }
+
+                        if (entState.isSubscribed) {
+                          return const SafeArea(child: HomePage());
+                        }
+                        return const PaywallPage();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
           );
         },
       ),

@@ -1,34 +1,61 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:injectable/injectable.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:logic_canvas/data/services/subscription_service.dart';
 import 'entitlements_state.dart';
 
+@injectable
 class EntitlementsCubit extends Cubit<EntitlementsState> {
-  static const String _boxName = 'entitlements';
-  static const String _keyIsPro = 'isPro';
+  final SubscriptionService _subscriptionService;
+  StreamSubscription? _subscription;
 
-  EntitlementsCubit() : super(EntitlementsState.initial) {
-    _load();
+  EntitlementsCubit(this._subscriptionService) : super(EntitlementsState.initial) {
+    _init();
   }
 
-  Future<void> _load() async {
-    try {
-      final box = await Hive.openBox(_boxName);
-      final isPro = box.get(_keyIsPro, defaultValue: false) as bool;
-      emit(state.copyWith(isPro: isPro));
-    } catch (_) {
-      // If entitlements fail to load, default to Free.
-      emit(state.copyWith(isPro: false));
-    }
+  Future<void> _init() async {
+    // 1. Initialize SDK
+    await _subscriptionService.initialize();
+    
+    // 2. Initial check & Fetch offerings
+    emit(state.copyWith(isLoading: true));
+    final result = await Future.wait([
+      _subscriptionService.isSubscribed(),
+      _subscriptionService.getOfferings(),
+    ]);
+
+    final isSubscribed = result[0] as bool;
+    final offerings = result[1] as Offerings?;
+
+    emit(state.copyWith(
+      isSubscribed: isSubscribed,
+      offerings: offerings,
+      isLoading: false,
+      isInitialized: true,
+    ));
+
+    // 3. Listen for updates (purchases/restores happening while app is open)
+    _subscription = _subscriptionService.subscriptionStatusStream.listen((isSubscribed) {
+      emit(state.copyWith(isSubscribed: isSubscribed));
+    });
   }
 
-  Future<void> setPro(bool value) async {
-    emit(state.copyWith(isPro: value));
-    try {
-      final box = await Hive.openBox(_boxName);
-      await box.put(_keyIsPro, value);
-    } catch (_) {
-      // Ignore persistence errors; UI state already updated.
-    }
+  Future<void> purchasePackage(Package package) async {
+    emit(state.copyWith(isLoading: true));
+    await _subscriptionService.purchasePackage(package);
+    emit(state.copyWith(isLoading: false));
+  }
+
+  Future<void> restore() async {
+    emit(state.copyWith(isLoading: true));
+    await _subscriptionService.restorePurchases();
+    emit(state.copyWith(isLoading: false));
+  }
+
+  @override
+  Future<void> close() {
+    _subscription?.cancel();
+    return super.close();
   }
 }
-
