@@ -396,7 +396,7 @@ export default function App() {
                   Submit Support Ticket
                 </button>
                 <div className="text-center pt-2 text-[10px] text-gray-500">
-                  Or email directly: <a href="mailto:support@asdevify.com" className="text-blue-400 hover:underline">support@asdevify.com</a>
+                  Or email directly: <a href="mailto:abdulsalam@asdevify.com" className="text-blue-400 hover:underline">abdulsalam@asdevify.com</a>
                 </div>
               </form>
             )}
@@ -440,7 +440,7 @@ export default function App() {
 
               <h4 className="text-sm font-bold text-white">5. Contact Information</h4>
               <p>
-                For questions regarding this policy, please reach out to <a href="mailto:privacy@asdevify.com" className="text-blue-400 hover:underline">privacy@asdevify.com</a>.
+                For questions regarding this policy, please reach out to <a href="mailto:abdulsalam@asdevify.com" className="text-blue-400 hover:underline">abdulsalam@asdevify.com</a>.
               </p>
             </div>
           </div>
