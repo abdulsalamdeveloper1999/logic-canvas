@@ -10,6 +10,15 @@ import PaywallCard from './components/PaywallCard';
 
 export default function App() {
   const [activeFaq, setActiveFaq] = useState(null);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+  const [supportMessageSent, setSupportMessageSent] = useState(false);
+
+  const SUPPORT_URL = "https://github.com/abdulsalamdeveloper1999/logic-canvas/issues";
+  const MARKETING_URL = "https://logiccanvas.asdevify.com";
+  const PRIVACY_URL = "https://asdevify.com/logic-canvas/privacy";
+  const TERMS_URL = "https://asdevify.com/logic-canvas/terms";
   
   const features = [
     {
@@ -117,6 +126,7 @@ export default function App() {
             <button onClick={() => scrollToSection('demo')} className="hover:text-white transition-colors cursor-pointer">Interactive Demo</button>
             <button onClick={() => scrollToSection('pricing')} className="hover:text-white transition-colors cursor-pointer">Pricing</button>
             <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors cursor-pointer">FAQs</button>
+            <button onClick={() => setShowSupport(true)} className="hover:text-white transition-colors cursor-pointer">Support</button>
           </div>
 
           {/* Primary CTA */}
@@ -317,6 +327,7 @@ export default function App() {
               <button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors cursor-pointer">Features</button>
               <button onClick={() => scrollToSection('demo')} className="hover:text-white transition-colors cursor-pointer">Workspace Demo</button>
               <button onClick={() => scrollToSection('pricing')} className="hover:text-white transition-colors cursor-pointer">Pricing</button>
+              <button onClick={() => setShowSupport(true)} className="hover:text-white transition-colors cursor-pointer">Support</button>
               <a href="https://github.com/abdulsalamdeveloper1999/logic-canvas" target="_blank" rel="noreferrer" className="hover:text-white transition-colors flex items-center gap-1.5">
                 GitHub <ExternalLink size={12} />
               </a>
@@ -331,9 +342,9 @@ export default function App() {
               In-app purchases are handled via Apple App Store transactions and managed with RevenueCat. Subscriptions auto-renew unless auto-renew is turned off at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period at the rate of the selected plan.
             </p>
             <p className="flex justify-center gap-4 text-gray-500 font-semibold pt-2">
-              <a href="#" className="hover:underline">Terms of Use</a>
+              <a href={TERMS_URL} onClick={(e) => { e.preventDefault(); setShowTerms(true); }} className="hover:underline">Terms of Use</a>
               <span>•</span>
-              <a href="#" className="hover:underline">Privacy Policy</a>
+              <a href={PRIVACY_URL} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }} className="hover:underline">Privacy Policy</a>
             </p>
           </div>
 
@@ -343,6 +354,140 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Support / Contact Modal */}
+      {showSupport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass-panel max-w-lg w-full rounded-2xl p-6 space-y-4 relative">
+            <button 
+              onClick={() => { setShowSupport(false); setSupportMessageSent(false); }} 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer"
+            >
+              <ChevronDown size={24} className="rotate-90" />
+            </button>
+            <h3 className="text-xl font-black text-white flex items-center gap-2">
+              <HelpCircle className="text-blue-500" /> Support & Feedback
+            </h3>
+            
+            {supportMessageSent ? (
+              <div className="py-8 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto">
+                  <Check size={24} className="stroke-[3]" />
+                </div>
+                <h4 className="text-base font-bold text-white">Message Sent!</h4>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto leading-relaxed">
+                  Thank you for reaching out to LogicCanvas support. We will get back to you at your email address within 24 hours.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={(e) => { e.preventDefault(); setSupportMessageSent(true); }} className="space-y-4 text-left">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Have a question, feedback, or found a bug? Send us a message and our support team will help you out.
+                </p>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Email Address</label>
+                  <input required type="email" placeholder="you@example.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Subject</label>
+                  <input required type="text" placeholder="How can we help you?" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Message</label>
+                  <textarea required rows={4} placeholder="Describe your issue or suggestions in detail..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors resize-none" />
+                </div>
+                <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-600/25">
+                  Submit Support Ticket
+                </button>
+                <div className="text-center pt-2 text-[10px] text-gray-500">
+                  Or email directly: <a href="mailto:support@asdevify.com" className="text-blue-400 hover:underline">support@asdevify.com</a>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Policy Modal */}
+      {showPrivacy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass-panel max-w-2xl w-full rounded-2xl p-6 md:p-8 space-y-6 max-h-[80vh] overflow-y-auto relative text-left">
+            <button 
+              onClick={() => setShowPrivacy(false)} 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer"
+            >
+              <ChevronDown size={24} className="rotate-90" />
+            </button>
+            <h3 className="text-2xl font-black text-white">Privacy Policy</h3>
+            <p className="text-[10px] text-gray-500">Last updated: June 6, 2026</p>
+            
+            <div className="space-y-4 text-xs text-gray-300 leading-relaxed font-sans">
+              <h4 className="text-sm font-bold text-white">1. Information We Do Not Collect</h4>
+              <p>
+                At LogicCanvas, we believe your work and algorithmic ideas are entirely your own. We do not collect, transmit, or store any of your custom drawings, text elements, variables, or whiteboard sketches. All data is kept strictly local on your device.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">2. iCloud Backup & Sync</h4>
+              <p>
+                If you choose to enable iCloud Sync, your whiteboard states are backed up and synced via Apple's secure iCloud Storage API. This data is stored in your personal iCloud container, which means asdevify has no access, visibility, or control over your sketches.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">3. In-App Subscriptions</h4>
+              <p>
+                LogicCanvas Pro purchases are handled by RevenueCat and validated using Apple App Store anonymous receipts. No personal or credit card identifiers are processed or stored by our servers.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">4. On-Device Intelligence</h4>
+              <p>
+                Our AI-based shape recognition and ML-powered handwriting recognition models run completely on your local device. We do not upload your strokes or handwriting to any external servers or third-party APIs.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">5. Contact Information</h4>
+              <p>
+                For questions regarding this policy, please reach out to <a href="mailto:privacy@asdevify.com" className="text-blue-400 hover:underline">privacy@asdevify.com</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terms of Use Modal */}
+      {showTerms && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass-panel max-w-2xl w-full rounded-2xl p-6 md:p-8 space-y-6 max-h-[80vh] overflow-y-auto relative text-left">
+            <button 
+              onClick={() => setShowTerms(false)} 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer"
+            >
+              <ChevronDown size={24} className="rotate-90" />
+            </button>
+            <h3 className="text-2xl font-black text-white">Terms of Use</h3>
+            <p className="text-[10px] text-gray-500">Last updated: June 6, 2026</p>
+            
+            <div className="space-y-4 text-xs text-gray-300 leading-relaxed font-sans">
+              <h4 className="text-sm font-bold text-white">1. License Grant</h4>
+              <p>
+                asdevify grants you a limited, non-exclusive, revocable, non-transferable license to download, install, and use LogicCanvas strictly for personal, educational, and interview preparation purposes on your iOS devices.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">2. Pro Subscriptions & Trials</h4>
+              <p>
+                Some features (AI shape detection, cloud architecture icons, ML recognition) are premium benefits requiring a Monthly or Annual membership. Free trials automatically convert to standard paid subscriptions unless canceled at least 24 hours prior to the trial expiration.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">3. App Content & Data Integrity</h4>
+              <p>
+                All drawings, diagrams, and structures are saved locally. We are not responsible for any data loss, deleted canvases, or synchronized database corruptions.
+              </p>
+
+              <h4 className="text-sm font-bold text-white">4. Disclaimers & Limitations</h4>
+              <p>
+                LogicCanvas is provided "as is" and "as available" without warranty of any kind. asdevify does not warrant that the application will meet your requirements or run uninterrupted. In no event shall we be liable for any special, incidental, or consequential damages resulting from your use of the software.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
