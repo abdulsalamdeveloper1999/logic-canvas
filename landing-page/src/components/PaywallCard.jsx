@@ -46,9 +46,7 @@ export default function PaywallCard() {
         <div className="md:col-span-3 flex flex-col justify-between text-left space-y-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="p-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                <Sparkles size={14} />
-              </span>
+              <img src="/logo.png" alt="Logo" className="w-5 h-5 object-contain" />
               <span className="text-xs font-black tracking-widest text-blue-400 uppercase">LogicCanvas Pro</span>
             </div>
             <h3 className="text-2xl md:text-3xl font-black text-white leading-tight">

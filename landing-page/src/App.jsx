@@ -16,9 +16,9 @@ export default function App() {
   const [supportMessageSent, setSupportMessageSent] = useState(false);
 
   const SUPPORT_URL = "https://github.com/abdulsalamdeveloper1999/logic-canvas/issues";
-  const MARKETING_URL = "https://logiccanvas.asdevify.com";
-  const PRIVACY_URL = "https://asdevify.com/logic-canvas/privacy";
-  const TERMS_URL = "https://asdevify.com/logic-canvas/terms";
+  const MARKETING_URL = "https://logiccanvas.asdevify.uk";
+  const PRIVACY_URL = "https://logiccanvas.asdevify.uk/privacy";
+  const TERMS_URL = "https://logiccanvas.asdevify.uk/terms";
   
   const features = [
     {
@@ -114,9 +114,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           {/* Brand Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-9 h-9 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-500 shadow-md">
-              <Sparkles size={18} className="animate-pulse" />
-            </div>
+            <img src="/logo.png" alt="LogicCanvas Logo" className="w-9 h-9 object-contain" />
             <span className="text-lg font-black tracking-tighter text-white">LogicCanvas</span>
           </div>
 
@@ -316,9 +314,7 @@ export default function App() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
             {/* Identity */}
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
-                <Sparkles size={14} />
-              </div>
+              <img src="/logo.png" alt="LogicCanvas Logo" className="w-8 h-8 object-contain" />
               <span className="text-base font-black tracking-tight text-white">LogicCanvas</span>
             </div>
 
