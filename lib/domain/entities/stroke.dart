@@ -4,7 +4,16 @@ import 'package:equatable/equatable.dart';
 
 part 'stroke.freezed.dart';
 
-enum StrokeType { pen, circle, rectangle, triangle, diamond, text, icon, connector }
+enum StrokeType {
+  pen,
+  circle,
+  rectangle,
+  triangle,
+  diamond,
+  text,
+  icon,
+  connector,
+}
 
 @freezed
 class Stroke with _$Stroke {
@@ -59,7 +68,7 @@ extension StrokeX on Stroke {
   }
 }
 
-// Minimal Equatable wrapper if needed for specific bloc comparisons, 
+// Minimal Equatable wrapper if needed for specific bloc comparisons,
 // though Freezed handles equality well. User explicitly asked for Equatable.
 class StrokeEquatable extends Equatable {
   final List<Offset> points;

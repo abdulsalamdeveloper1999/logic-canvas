@@ -7,7 +7,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Asset Validation Tests', () {
-    testWidgets('Verify all bundled SVG icons are valid', (WidgetTester tester) async {
+    testWidgets('Verify all bundled SVG icons are valid', (
+      WidgetTester tester,
+    ) async {
       final List<String> categories = ['aws-icons', 'azure-icons', 'gcp-icons'];
       final List<String> allIconPaths = [];
 
@@ -30,11 +32,7 @@ void main() {
         // SVG load check (sampling if there are too many, but here we try all)
         try {
           await tester.pumpWidget(
-            MaterialApp(
-              home: Scaffold(
-                body: SvgPicture.file(file),
-              ),
-            ),
+            MaterialApp(home: Scaffold(body: SvgPicture.file(file))),
           );
           await tester.pump();
         } catch (e) {

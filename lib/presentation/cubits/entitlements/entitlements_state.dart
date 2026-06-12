@@ -35,4 +35,3 @@ class EntitlementsState {
     isInitialized: false,
   );
 }
-

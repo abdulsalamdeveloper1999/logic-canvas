@@ -77,7 +77,9 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   void setStrokeWidth(double width) {
     if (state.isEraser) {
-      emit(state.copyWith(eraserStrokeWidth: width.clamp(1.0, _maxEraserWidth)));
+      emit(
+        state.copyWith(eraserStrokeWidth: width.clamp(1.0, _maxEraserWidth)),
+      );
     } else {
       emit(state.copyWith(penStrokeWidth: width.clamp(1.0, _maxPenWidth)));
     }
@@ -112,7 +114,10 @@ class SettingsCubit extends Cubit<SettingsState> {
     emit(state.copyWith(panOffset: panOffset));
   }
 
-  void setTransformTransient({required double zoomLevel, required Offset panOffset}) {
+  void setTransformTransient({
+    required double zoomLevel,
+    required Offset panOffset,
+  }) {
     emit(
       state.copyWith(
         zoomLevel: zoomLevel.clamp(0.1, 5.0),

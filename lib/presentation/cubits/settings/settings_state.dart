@@ -50,9 +50,17 @@ class SettingsState with _$SettingsState {
         (e) => e.name == (json['themeMode'] as String? ?? 'dark'),
         orElse: () => ThemeMode.dark,
       ),
-      strokeColor: Color(json['strokeColor'] as int? ?? Colors.white.toARGB32()),
-      penStrokeWidth: (json['penStrokeWidth'] as num? ?? (json['strokeWidth'] as num? ?? 5.0)).toDouble().clamp(1.0, 50.0),
-      eraserStrokeWidth: (json['eraserStrokeWidth'] as num? ?? 24.0).toDouble().clamp(1.0, 100.0),
+      strokeColor: Color(
+        json['strokeColor'] as int? ?? Colors.white.toARGB32(),
+      ),
+      penStrokeWidth:
+          (json['penStrokeWidth'] as num? ??
+                  (json['strokeWidth'] as num? ?? 5.0))
+              .toDouble()
+              .clamp(1.0, 50.0),
+      eraserStrokeWidth: (json['eraserStrokeWidth'] as num? ?? 24.0)
+          .toDouble()
+          .clamp(1.0, 100.0),
       isEraser: json['isEraser'] as bool? ?? false,
       pattern: BackgroundPattern.values.firstWhere(
         (e) => e.name == (json['pattern'] as String? ?? 'grid'),

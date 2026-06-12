@@ -23,17 +23,19 @@ class _PaywallPageState extends State<PaywallPage> {
         final currentOffering = offerings?.current;
 
         // Auto-select annual if available, otherwise monthly
-        if (_selectedPackage == null && currentOffering != null && currentOffering.availablePackages.isNotEmpty) {
-           final availableAnnual = currentOffering.annual;
-           final availableMonthly = currentOffering.monthly;
-           
-           if (availableAnnual != null) {
-             _selectedPackage = availableAnnual;
-           } else if (availableMonthly != null) {
-             _selectedPackage = availableMonthly;
-           } else {
-             _selectedPackage = currentOffering.availablePackages.first;
-           }
+        if (_selectedPackage == null &&
+            currentOffering != null &&
+            currentOffering.availablePackages.isNotEmpty) {
+          final availableAnnual = currentOffering.annual;
+          final availableMonthly = currentOffering.monthly;
+
+          if (availableAnnual != null) {
+            _selectedPackage = availableAnnual;
+          } else if (availableMonthly != null) {
+            _selectedPackage = availableMonthly;
+          } else {
+            _selectedPackage = currentOffering.availablePackages.first;
+          }
         }
 
         return Scaffold(
@@ -110,37 +112,66 @@ class _PaywallPageState extends State<PaywallPage> {
                       const SizedBox(height: 40),
 
                       // Features List
-                      _buildFeatureItem(Icons.draw_rounded, "Advanced Interaction", "Shape detection & handwriting recognition."),
+                      _buildFeatureItem(
+                        Icons.draw_rounded,
+                        "Advanced Interaction",
+                        "Shape detection & handwriting recognition.",
+                      ),
                       const SizedBox(height: 16),
-                      _buildFeatureItem(Icons.cloud_sync_rounded, "iCloud Sync", "Your boards, synced across all devices."),
+                      _buildFeatureItem(
+                        Icons.cloud_sync_rounded,
+                        "iCloud Sync",
+                        "Your boards, synced across all devices.",
+                      ),
                       const SizedBox(height: 16),
-                      _buildFeatureItem(Icons.picture_as_pdf_rounded, "Pro Export", "High-fidelity PDF and PNG exports."),
+                      _buildFeatureItem(
+                        Icons.picture_as_pdf_rounded,
+                        "Pro Export",
+                        "High-fidelity PDF and PNG exports.",
+                      ),
                       const SizedBox(height: 16),
-                      _buildFeatureItem(Icons.layers_rounded, "Unlimited Boards", "Organize every problem effectively."),
+                      _buildFeatureItem(
+                        Icons.layers_rounded,
+                        "Unlimited Boards",
+                        "Organize every problem effectively.",
+                      ),
 
                       const Spacer(),
 
                       // Pack Selection
                       // Pack Selection
                       if (state.isLoading)
-                        const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-                      else if (currentOffering != null && currentOffering.availablePackages.isNotEmpty)
+                        const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.blueAccent,
+                          ),
+                        )
+                      else if (currentOffering != null &&
+                          currentOffering.availablePackages.isNotEmpty)
                         Column(
                           children: [
                             // Show all available packages sorted by price (most expensive/annual usually first)
-                            ...currentOffering.availablePackages.reversed.map((package) {
-                              final isAnnual = package.packageType == PackageType.annual;
-                              final isMonthly = package.packageType == PackageType.monthly;
-                              
+                            ...currentOffering.availablePackages.reversed.map((
+                              package,
+                            ) {
+                              final isAnnual =
+                                  package.packageType == PackageType.annual;
+                              final isMonthly =
+                                  package.packageType == PackageType.monthly;
+
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _buildPackageCard(
                                   package,
-                                  description: isAnnual 
-                                      ? "Only £2.50/month, billed annually. Save 50%!" 
-                                      : (isMonthly ? "Flexible month-to-month access." : null),
+                                  description: isAnnual
+                                      ? "Only £2.50/month, billed annually. Save 50%!"
+                                      : (isMonthly
+                                            ? "Flexible month-to-month access."
+                                            : null),
                                   badge: isAnnual ? "BEST VALUE" : null,
-                                  isSelected: _selectedPackage?.identifier == package.identifier,
+                                  isSelected:
+                                      _selectedPackage?.identifier ==
+                                      package.identifier,
                                 ),
                               );
                             }),
@@ -149,17 +180,28 @@ class _PaywallPageState extends State<PaywallPage> {
                       else
                         const Column(
                           children: [
-                            Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                            Icon(
+                              Icons.error_outline_rounded,
+                              color: Colors.redAccent,
+                              size: 48,
+                            ),
                             SizedBox(height: 16),
                             Text(
                               "No plans available",
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             SizedBox(height: 8),
                             Text(
                               "Please ensure your RevenueCat Dashboard has a 'Current' offering with products attached.",
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white54, fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -171,8 +213,11 @@ class _PaywallPageState extends State<PaywallPage> {
                         width: double.infinity,
                         height: 64,
                         child: ElevatedButton(
-                          onPressed: _selectedPackage != null && !state.isLoading
-                              ? () => context.read<EntitlementsCubit>().purchasePackage(_selectedPackage!)
+                          onPressed:
+                              _selectedPackage != null && !state.isLoading
+                              ? () => context
+                                    .read<EntitlementsCubit>()
+                                    .purchasePackage(_selectedPackage!)
                               : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blueAccent,
@@ -183,26 +228,30 @@ class _PaywallPageState extends State<PaywallPage> {
                             ),
                             elevation: 0,
                           ),
-                          child: state.isLoading 
-                            ? const SizedBox(
-                                width: 24, 
-                                height: 24, 
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Text(
-                                _selectedPackage?.packageType == PackageType.annual 
-                                  ? "Start 1 Week Free Trial" 
-                                  : "Start 3 Days Free Trial",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                          child: state.isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  _selectedPackage?.packageType ==
+                                          PackageType.annual
+                                      ? "Subscribe for ${_selectedPackage!.storeProduct.priceString}/year"
+                                      : "Subscribe for ${_selectedPackage!.storeProduct.priceString}/month",
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
-                              ),
                         ),
                       ),
 
                       const SizedBox(height: 24),
-                      
+
                       // Compliance Text
                       Text(
                         "After the free trial, payment will be charged to your Apple ID account. Subscription automatically renews unless it is canceled at least 24 hours before the end of the current period. You can manage and cancel your subscriptions in your App Store account settings.",
@@ -213,7 +262,7 @@ class _PaywallPageState extends State<PaywallPage> {
                           height: 1.4,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -222,7 +271,10 @@ class _PaywallPageState extends State<PaywallPage> {
                           _buildFooterDivider(),
                           _buildFooterLink("Privacy Policy", () {}),
                           _buildFooterDivider(),
-                          _buildFooterLink("Restore", () => context.read<EntitlementsCubit>().restore()),
+                          _buildFooterLink(
+                            "Restore",
+                            () => context.read<EntitlementsCubit>().restore(),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -300,10 +352,14 @@ class _PaywallPageState extends State<PaywallPage> {
     );
   }
 
-  Widget _buildPackageCard(Package package, {required bool isSelected, String? description, String? badge}) {
+  Widget _buildPackageCard(
+    Package package, {
+    required bool isSelected,
+    String? description,
+    String? badge,
+  }) {
     final price = package.storeProduct.priceString;
     final isAnnual = package.packageType == PackageType.annual;
-    final trialText = isAnnual ? "1 WEEK FREE" : "3 DAYS FREE";
 
     return GestureDetector(
       onTap: () => setState(() => _selectedPackage = package),
@@ -311,12 +367,14 @@ class _PaywallPageState extends State<PaywallPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? Colors.blueAccent.withValues(alpha: 0.1) 
+          color: isSelected
+              ? Colors.blueAccent.withValues(alpha: 0.1)
               : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? Colors.blueAccent : Colors.white.withValues(alpha: 0.1),
+            color: isSelected
+                ? Colors.blueAccent
+                : Colors.white.withValues(alpha: 0.1),
             width: 2,
           ),
         ),
@@ -326,46 +384,28 @@ class _PaywallPageState extends State<PaywallPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blueAccent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          trialText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
+                  if (badge != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        badge,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white12,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            badge,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Text(
                     isAnnual ? "Annual Membership" : "Monthly Membership",
                     style: const TextStyle(
@@ -385,6 +425,15 @@ class _PaywallPageState extends State<PaywallPage> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 4),
+                  Text(
+                    isAnnual ? "Includes 1-week free trial" : "Includes 3-days free trial",
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -395,7 +444,7 @@ class _PaywallPageState extends State<PaywallPage> {
                   price,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w900,
                   ),
                 ),

@@ -141,9 +141,7 @@ class _BoardPanelState extends State<BoardPanel> {
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.primary,
                         side: BorderSide(
                           color: Theme.of(
                             context,
@@ -167,9 +165,7 @@ class _BoardPanelState extends State<BoardPanel> {
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.primary,
                         side: BorderSide(
                           color: Theme.of(
                             context,
@@ -341,7 +337,8 @@ class _BoardPanelState extends State<BoardPanel> {
     final pareto = _filterProblems(ProblemData.paretoProblems);
 
     final bool isSearching = _searchQuery.isNotEmpty;
-    final bool hasAnyResults = starterPack.isNotEmpty || blind75.isNotEmpty || pareto.isNotEmpty;
+    final bool hasAnyResults =
+        starterPack.isNotEmpty || blind75.isNotEmpty || pareto.isNotEmpty;
 
     return Column(
       children: [
@@ -350,26 +347,35 @@ class _BoardPanelState extends State<BoardPanel> {
           child: Container(
             height: 40,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
               ),
             ),
             child: TextField(
               controller: _searchController,
-              onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+              onChanged: (val) =>
+                  setState(() => _searchQuery = val.trim().toLowerCase()),
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search problems...',
                 hintStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                   fontSize: 13,
                 ),
                 prefixIcon: Icon(
                   Icons.search_rounded,
                   size: 18,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.5),
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -397,7 +403,8 @@ class _BoardPanelState extends State<BoardPanel> {
                         context,
                         'STARTER PACK',
                         starterPack,
-                        isSearching || _expandedCategories.contains('STARTER PACK'),
+                        isSearching ||
+                            _expandedCategories.contains('STARTER PACK'),
                       ),
                     if (blind75.isNotEmpty)
                       _buildCategorySection(
@@ -412,7 +419,10 @@ class _BoardPanelState extends State<BoardPanel> {
                         context,
                         'PARETO LEETCODE (49)',
                         pareto,
-                        isSearching || _expandedCategories.contains('PARETO LEETCODE (49)'),
+                        isSearching ||
+                            _expandedCategories.contains(
+                              'PARETO LEETCODE (49)',
+                            ),
                         useSubcategories: !isSearching,
                       ),
                   ],
@@ -438,7 +448,9 @@ class _BoardPanelState extends State<BoardPanel> {
           Icon(
             Icons.search_off_rounded,
             size: 48,
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
           Text(
@@ -451,7 +463,9 @@ class _BoardPanelState extends State<BoardPanel> {
           Text(
             'Try a different keyword',
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               fontSize: 12,
             ),
           ),

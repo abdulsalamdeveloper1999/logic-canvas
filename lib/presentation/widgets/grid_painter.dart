@@ -19,16 +19,22 @@ class GridPainter extends CustomPainter {
     if (pattern == BackgroundPattern.none) return;
 
     final majorPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: themeMode == ThemeMode.dark ? 0.15 : 0.2)
+      ..color = Colors.grey.withValues(
+        alpha: themeMode == ThemeMode.dark ? 0.15 : 0.2,
+      )
       ..strokeWidth = 1.0;
 
     final minorPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: (themeMode == ThemeMode.dark ? 0.05 : 0.08) * zoomLevel.clamp(0.5, 1.0))
+      ..color = Colors.grey.withValues(
+        alpha:
+            (themeMode == ThemeMode.dark ? 0.05 : 0.08) *
+            zoomLevel.clamp(0.5, 1.0),
+      )
       ..strokeWidth = 0.5;
 
     final double majorStep = 100.0 * zoomLevel;
     final double minorStep = 20.0 * zoomLevel;
-    
+
     // Calculate the start positions based on panOffset
     final double majorStartX = panOffset.dx % majorStep;
     final double majorStartY = panOffset.dy % majorStep;

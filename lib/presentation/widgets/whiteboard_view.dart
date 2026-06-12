@@ -17,7 +17,15 @@ import 'package:logic_canvas/core/injection.dart';
 
 import '../cubits/settings/settings_state.dart';
 
-enum _TransformHandle { none, topLeft, topRight, bottomLeft, bottomRight, rotate, delete }
+enum _TransformHandle {
+  none,
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+  rotate,
+  delete,
+}
 
 class WhiteboardView extends StatefulWidget {
   const WhiteboardView({super.key});
@@ -135,18 +143,23 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                   _hasInitiatedWithMovement = false;
 
                   if (settings.toolMode == ToolMode.diagram) {
-                    final canvasPoint = _toCanvasPoint(settings, event.localPosition);
-                    
+                    final canvasPoint = _toCanvasPoint(
+                      settings,
+                      event.localPosition,
+                    );
+
                     // 1. Check if we hit a handle of already selected icon
                     if (drawingState.selectedStrokeIndex != null &&
                         drawingState.selectedStrokeIndex! <
                             drawingState.activeStrokes.length) {
-                      final stroke = drawingState.activeStrokes[
-                          drawingState.selectedStrokeIndex!];
+                      final stroke = drawingState
+                          .activeStrokes[drawingState.selectedStrokeIndex!];
                       if (stroke.type == StrokeType.icon) {
                         final handle = _hitTestHandles(canvasPoint, stroke);
                         if (handle == _TransformHandle.delete) {
-                          drawingCubit.removeStrokeAt(drawingState.selectedStrokeIndex!);
+                          drawingCubit.removeStrokeAt(
+                            drawingState.selectedStrokeIndex!,
+                          );
                           _activePointerId = null;
                           _activePointerKind = null;
                           return;
@@ -156,8 +169,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                           _draggingIconIndex = drawingState.selectedStrokeIndex;
                           _initialScale = stroke.scale;
                           _initialRotation = stroke.rotation;
-                          _initialHandleOffset = canvasPoint - stroke.points.first;
-                          _initialAngle = (canvasPoint - stroke.points.first).direction;
+                          _initialHandleOffset =
+                              canvasPoint - stroke.points.first;
+                          _initialAngle =
+                              (canvasPoint - stroke.points.first).direction;
                           _pendingPoint = null;
                           return;
                         }
@@ -169,7 +184,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                       strokes: drawingState.activeStrokes,
                       canvasPoint: canvasPoint,
                     );
-                    
+
                     if (hitIndex != null) {
                       drawingCubit.selectStroke(hitIndex);
                       final hitStroke = drawingState.activeStrokes[hitIndex];
@@ -295,7 +310,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               }
 
               final settings = settingsCubit.state;
-              final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
+              final isSubscribed = context
+                  .read<EntitlementsCubit>()
+                  .state
+                  .isSubscribed;
               await _cleanupDrawing(
                 drawingCubit,
                 isSubscribed && settings.enableShapeDetection,
@@ -317,7 +335,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               }
 
               final settings = settingsCubit.state;
-              final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
+              final isSubscribed = context
+                  .read<EntitlementsCubit>()
+                  .state
+                  .isSubscribed;
               await _cleanupDrawing(
                 drawingCubit,
                 isSubscribed && settings.enableShapeDetection,
@@ -423,7 +444,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                     drawingCubit,
                     settingsCubit,
                   );
-                  final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
+                  final isSubscribed = context
+                      .read<EntitlementsCubit>()
+                      .state
+                      .isSubscribed;
                   await _cleanupDrawing(
                     drawingCubit,
                     isSubscribed && settings.enableShapeDetection,
@@ -451,7 +475,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                     },
                   ),
                   BlocListener<DrawingCubit, DrawingState>(
-                    listenWhen: (prev, curr) => prev.activeStrokes != curr.activeStrokes,
+                    listenWhen: (prev, curr) =>
+                        prev.activeStrokes != curr.activeStrokes,
                     listener: (context, state) {
                       // Load SVGs for any new icon strokes
                       for (final stroke in state.activeStrokes) {
@@ -514,7 +539,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                                         child: SizedBox.expand(
                                           child: CustomPaint(
                                             painter: WhiteboardPainter(
-                                              strokes: drawingState.activeStrokes,
+                                              strokes:
+                                                  drawingState.activeStrokes,
                                               activeStroke: activeStroke,
                                               pattern: BackgroundPattern.none,
                                               themeMode: settings.themeMode,
@@ -524,7 +550,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                                               isEraser: settings.isEraser,
                                               panOffset: settings.panOffset,
                                               zoomLevel: settings.zoomLevel,
-                                              selectedStrokeIndex: drawingState.selectedStrokeIndex,
+                                              selectedStrokeIndex: drawingState
+                                                  .selectedStrokeIndex,
                                               svgPictures: _svgCache,
                                             ),
                                             size: Size.infinite,
@@ -586,7 +613,12 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       final c = s.points.first;
       final size = iconBaseSize * s.scale;
       final half = size / 2;
-      final rect = Rect.fromLTWH(c.dx - half, c.dy - half, size, size).inflate(8);
+      final rect = Rect.fromLTWH(
+        c.dx - half,
+        c.dy - half,
+        size,
+        size,
+      ).inflate(8);
       if (rect.contains(canvasPoint)) return i;
     }
     return null;

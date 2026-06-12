@@ -10,7 +10,10 @@ class ProgressRepositoryImpl implements IProgressRepository {
 
   @override
   Future<Set<String>> getCompletedProblemIds() async {
-    return _progressBox.keys.cast<String>().where((key) => _progressBox.get(key) == true).toSet();
+    return _progressBox.keys
+        .cast<String>()
+        .where((key) => _progressBox.get(key) == true)
+        .toSet();
   }
 
   @override

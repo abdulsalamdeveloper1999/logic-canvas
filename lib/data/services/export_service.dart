@@ -15,10 +15,7 @@ class ExportService {
 
     // We use Printing to handle the platform-specific "Save/Share" dialog
     // It works well across iOS and Android for both images and PDFs.
-    await Printing.sharePdf(
-      bytes: image,
-      filename: '$boardName.png',
-    );
+    await Printing.sharePdf(bytes: image, filename: '$boardName.png');
   }
 
   Future<void> exportToPdf(String boardName) async {
@@ -32,18 +29,13 @@ class ExportService {
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
         build: (pw.Context context) {
-          return pw.Center(
-            child: pw.Image(pdfImage, fit: pw.BoxFit.contain),
-          );
+          return pw.Center(child: pw.Image(pdfImage, fit: pw.BoxFit.contain));
         },
       ),
     );
 
     final pdfBytes = await pdf.save();
-    
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: '$boardName.pdf',
-    );
+
+    await Printing.sharePdf(bytes: pdfBytes, filename: '$boardName.pdf');
   }
 }

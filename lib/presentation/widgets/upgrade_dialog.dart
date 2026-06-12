@@ -7,7 +7,10 @@ class UpgradeDialog {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        final isSubscribed = context.read<EntitlementsCubit>().state.isSubscribed;
+        final isSubscribed = context
+            .read<EntitlementsCubit>()
+            .state
+            .isSubscribed;
         return AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.surface,
           title: const Text('Premium Access'),
@@ -24,7 +27,7 @@ class UpgradeDialog {
                 Navigator.of(dialogContext).pop();
                 // Navigate to paywall if not subscribed
                 if (!isSubscribed) {
-                  // The app-wide guard in main.dart handles this if they refresh, 
+                  // The app-wide guard in main.dart handles this if they refresh,
                   // but for immediate feedback we can trigger paywall view here.
                 }
               },

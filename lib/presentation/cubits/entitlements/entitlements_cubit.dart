@@ -10,14 +10,15 @@ class EntitlementsCubit extends Cubit<EntitlementsState> {
   final SubscriptionService _subscriptionService;
   StreamSubscription? _subscription;
 
-  EntitlementsCubit(this._subscriptionService) : super(EntitlementsState.initial) {
+  EntitlementsCubit(this._subscriptionService)
+    : super(EntitlementsState.initial) {
     _init();
   }
 
   Future<void> _init() async {
     // 1. Initialize SDK
     await _subscriptionService.initialize();
-    
+
     // 2. Initial check & Fetch offerings
     emit(state.copyWith(isLoading: true));
     final result = await Future.wait([
@@ -28,15 +29,19 @@ class EntitlementsCubit extends Cubit<EntitlementsState> {
     final isSubscribed = result[0] as bool;
     final offerings = result[1] as Offerings?;
 
-    emit(state.copyWith(
-      isSubscribed: isSubscribed,
-      offerings: offerings,
-      isLoading: false,
-      isInitialized: true,
-    ));
+    emit(
+      state.copyWith(
+        isSubscribed: isSubscribed,
+        offerings: offerings,
+        isLoading: false,
+        isInitialized: true,
+      ),
+    );
 
     // 3. Listen for updates (purchases/restores happening while app is open)
-    _subscription = _subscriptionService.subscriptionStatusStream.listen((isSubscribed) {
+    _subscription = _subscriptionService.subscriptionStatusStream.listen((
+      isSubscribed,
+    ) {
       emit(state.copyWith(isSubscribed: isSubscribed));
     });
   }

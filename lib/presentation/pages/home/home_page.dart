@@ -42,9 +42,7 @@ class _HomePageState extends State<HomePage> {
         builder: (context, settings) {
           return Stack(
             children: [
-              Positioned.fill(
-                child: const WhiteboardView(),
-              ),
+              Positioned.fill(child: const WhiteboardView()),
 
               Positioned(
                 top: 0,
@@ -127,10 +125,14 @@ class _HomePageState extends State<HomePage> {
                         maxHeight: MediaQuery.of(context).size.height * 0.6,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surface.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                          color: Theme.of(
+                            context,
+                          ).dividerColor.withValues(alpha: 0.1),
                         ),
                       ),
                       child: SingleChildScrollView(
@@ -165,7 +167,9 @@ class _HomePageState extends State<HomePage> {
                                 Text(
                                   problem.category,
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -186,17 +190,21 @@ class _HomePageState extends State<HomePage> {
                               problem.description ??
                                   'No description available.',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
                                 fontSize: 14,
                                 height: 1.5,
                               ),
                             ),
                             if (problem.examples.isNotEmpty) ...[
                               const SizedBox(height: 24),
-                               Text(
+                              Text(
                                 "EXAMPLES",
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 1.2,
@@ -209,10 +217,12 @@ class _HomePageState extends State<HomePage> {
                             ],
                             if (problem.hints.isNotEmpty) ...[
                               const SizedBox(height: 24),
-                               Text(
+                              Text(
                                 "HINTS",
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 1.2,
@@ -245,7 +255,11 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05)),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,7 +295,9 @@ class _HomePageState extends State<HomePage> {
           child: Text(
             value,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
               fontSize: 11,
               fontFamily: 'Courier',
             ),
@@ -316,7 +332,9 @@ class _HomePageState extends State<HomePage> {
             child: Text(
               hint,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
                 fontSize: 12,
                 height: 1.4,
               ),
@@ -387,7 +405,9 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -504,10 +524,14 @@ class _HomePageState extends State<HomePage> {
               context,
             ).colorScheme.surface.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(35),
-            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.4),
+                color: Theme.of(
+                  context,
+                ).colorScheme.shadow.withValues(alpha: 0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -709,7 +733,9 @@ class _HomePageState extends State<HomePage> {
                     ).colorScheme.surface.withValues(alpha: 0.9),
                     border: Border(
                       right: BorderSide(
-                        color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                        color: Theme.of(
+                          context,
+                        ).dividerColor.withValues(alpha: 0.1),
                       ),
                     ),
                   ),
@@ -732,7 +758,9 @@ class _HomePageState extends State<HomePage> {
                   ).colorScheme.surface.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                    color: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.1),
                   ),
                 ),
                 child: Icon(
@@ -758,7 +786,9 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
             border: Border(
-              bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.05)),
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.05),
+              ),
             ),
           ),
           child: SafeArea(
@@ -846,16 +876,17 @@ class _HomePageState extends State<HomePage> {
       child: IconButton(
         icon: Icon(
           icon,
-          color:
-              onPressed == null
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+          color: onPressed == null
+              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
           size: 22,
         ),
         onPressed: onPressed,
         tooltip: tooltip,
         splashRadius: 24,
-        hoverColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
+        hoverColor: Theme.of(
+          context,
+        ).colorScheme.onSurface.withValues(alpha: 0.05),
       ),
     );
   }
@@ -877,18 +908,28 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+          border: Border.all(
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+          ),
         ),
         child: Row(
           children: [
-            Icon(Icons.ios_share_rounded, size: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+            Icon(
+              Icons.ios_share_rounded,
+              size: 18,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
             SizedBox(width: 10),
             Text(
               "EXPORT",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
                 letterSpacing: 0.5,
               ),
             ),
@@ -951,7 +992,10 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: currentColor,
           shape: BoxShape.circle,
-          border: Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.onSurface,
+            width: 2,
+          ),
           boxShadow: [
             BoxShadow(
               color: currentColor.withValues(alpha: 0.4),
@@ -978,24 +1022,57 @@ class _HomePageState extends State<HomePage> {
         min: minWidth,
         max: maxWidth,
         activeColor: Theme.of(context).colorScheme.primary,
-        inactiveColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
+        inactiveColor: Theme.of(
+          context,
+        ).colorScheme.onSurface.withValues(alpha: 0.1),
         onChanged: (value) =>
             context.read<SettingsCubit>().setStrokeWidth(value),
       ),
     );
   }
 
-  Widget _buildToolSpecificControls(BuildContext context, SettingsState settings) {
+  Widget _buildToolSpecificControls(
+    BuildContext context,
+    SettingsState settings,
+  ) {
     if (settings.isEraser) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _presetButton(context, Icons.circle, 20.0, settings.strokeWidth, "Small Eraser"),
-          _presetButton(context, Icons.circle, 40.0, settings.strokeWidth, "Medium Eraser"),
-          _presetButton(context, Icons.circle, 60.0, settings.strokeWidth, "Large Eraser"),
-          _presetButton(context, Icons.circle, 80.0, settings.strokeWidth, "Huge Eraser"),
+          _presetButton(
+            context,
+            Icons.circle,
+            20.0,
+            settings.strokeWidth,
+            "Small Eraser",
+          ),
+          _presetButton(
+            context,
+            Icons.circle,
+            40.0,
+            settings.strokeWidth,
+            "Medium Eraser",
+          ),
+          _presetButton(
+            context,
+            Icons.circle,
+            60.0,
+            settings.strokeWidth,
+            "Large Eraser",
+          ),
+          _presetButton(
+            context,
+            Icons.circle,
+            80.0,
+            settings.strokeWidth,
+            "Huge Eraser",
+          ),
           _divider(),
-          _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, true),
+          _buildBrushSizePreview(
+            settings.strokeWidth,
+            settings.strokeColor,
+            true,
+          ),
           _buildWidthSlider(context, settings.strokeWidth, maxWidth: 100.0),
         ],
       );
@@ -1003,13 +1080,35 @@ class _HomePageState extends State<HomePage> {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _presetButton(context, Icons.edit_note, 2.0, settings.strokeWidth, "Pencil"),
+          _presetButton(
+            context,
+            Icons.edit_note,
+            2.0,
+            settings.strokeWidth,
+            "Pencil",
+          ),
           _presetButton(context, Icons.edit, 5.0, settings.strokeWidth, "Pen"),
-          _presetButton(context, Icons.brush_rounded, 12.0, settings.strokeWidth, "Brush"),
-          _presetButton(context, Icons.format_paint_rounded, 24.0, settings.strokeWidth, "Paint"),
+          _presetButton(
+            context,
+            Icons.brush_rounded,
+            12.0,
+            settings.strokeWidth,
+            "Brush",
+          ),
+          _presetButton(
+            context,
+            Icons.format_paint_rounded,
+            24.0,
+            settings.strokeWidth,
+            "Paint",
+          ),
           _divider(),
           _buildColorButton(context, settings.strokeColor),
-          _buildBrushSizePreview(settings.strokeWidth, settings.strokeColor, false),
+          _buildBrushSizePreview(
+            settings.strokeWidth,
+            settings.strokeColor,
+            false,
+          ),
           _buildWidthSlider(context, settings.strokeWidth, maxWidth: 50.0),
         ],
       );
@@ -1023,12 +1122,15 @@ class _HomePageState extends State<HomePage> {
   ) {
     final maxRange = isEraser ? 100.0 : 50.0;
     final safe = strokeWidth.clamp(1.0, maxRange);
-    final diameter = (6.0 + (safe - 1.0) * (14.0 / (maxRange - 1.0))).clamp(6.0, 20.0);
+    final diameter = (6.0 + (safe - 1.0) * (14.0 / (maxRange - 1.0))).clamp(
+      6.0,
+      20.0,
+    );
 
     final fill = isEraser
         ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12)
         : strokeColor.withValues(alpha: 0.85);
-    final border = isEraser 
+    final border = isEraser
         ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54)
         : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24);
 
@@ -1041,9 +1143,15 @@ class _HomePageState extends State<HomePage> {
         height: 26,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.04),
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.04),
           shape: BoxShape.circle,
-          border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08)),
+          border: Border.all(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.08),
+          ),
         ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -1087,7 +1195,10 @@ class _HomePageState extends State<HomePage> {
         icon: Icon(icon),
         color: active
             ? Theme.of(context).colorScheme.primary
-            : (color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+            : (color ??
+                  Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6)),
         iconSize: 28,
       ),
     );
@@ -1105,14 +1216,18 @@ class _HomePageState extends State<HomePage> {
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
-        color: isActive ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1) : Colors.transparent,
+        color: isActive
+            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: IconButton(
         icon: Icon(
           icon,
           size: 18 + (size / 10).clamp(0, 10),
-          color: isActive ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          color: isActive
+              ? Theme.of(context).colorScheme.onSurface
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
         ),
         onPressed: () => context.read<SettingsCubit>().setStrokeWidth(size),
         tooltip: tooltip,
@@ -1136,7 +1251,9 @@ class _HomePageState extends State<HomePage> {
           onPressed();
         },
         icon: Icon(icon),
-        color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        color:
+            color ??
+            Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         iconSize: 20,
         constraints: const BoxConstraints(),
         padding: const EdgeInsets.all(8),
@@ -1159,7 +1276,9 @@ class _HomePageState extends State<HomePage> {
           onPressed();
         },
         icon: Icon(icon),
-        color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+        color: active
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
         iconSize: 20,
         constraints: const BoxConstraints(),
         padding: const EdgeInsets.all(8),

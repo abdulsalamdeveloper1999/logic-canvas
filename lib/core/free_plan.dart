@@ -37,4 +37,3 @@ class FreePlan {
     return basicIconFileNames.contains(file);
   }
 }
-

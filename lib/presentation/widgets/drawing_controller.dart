@@ -36,12 +36,14 @@ class DrawingController extends ChangeNotifier {
   }
 
   void startStroke(Offset point) {
-    _strokes.add(Stroke(
-      points: [point],
-      color: _isEraser ? Colors.transparent : _currentColor,
-      strokeWidth: _currentWidth,
-      isEraser: _isEraser,
-    ));
+    _strokes.add(
+      Stroke(
+        points: [point],
+        color: _isEraser ? Colors.transparent : _currentColor,
+        strokeWidth: _currentWidth,
+        isEraser: _isEraser,
+      ),
+    );
     _redoStack.clear();
     notifyListeners();
   }
