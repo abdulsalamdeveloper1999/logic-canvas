@@ -7,6 +7,8 @@ import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_state.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
+import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/gemma/gemma_state.dart';
 
 class BoardPanel extends StatefulWidget {
   const BoardPanel({super.key});
@@ -226,6 +228,8 @@ class _BoardPanelState extends State<BoardPanel> {
               ],
             ]),
             const SizedBox(height: 16),
+            _buildAiModelSection(context),
+            const SizedBox(height: 16),
             _buildSettingsSection(context, 'WORKBENCH', [
               ListTile(
                 title: Text(
@@ -288,6 +292,223 @@ class _BoardPanelState extends State<BoardPanel> {
     );
   }
 
+  Widget _buildAiModelSection(BuildContext context) {
+    return BlocBuilder<GemmaCubit, GemmaState>(
+      builder: (context, state) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'AI MODEL',
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.7),
+                fontWeight: FontWeight.w900,
+                fontSize: 10,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            switch (state.status) {
+              GemmaStatus.idle => _buildIdleState(context),
+              GemmaStatus.downloading => _buildDownloadingState(context, state),
+              GemmaStatus.ready => _buildReadyState(context),
+              GemmaStatus.error => _buildErrorState(context, state),
+            },
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildIdleState(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          title: Text(
+            'On-Device AI Model',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Text(
+            'Enhance your whiteboard with AI-powered code explanations & diagram insights (1.7 GB)',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+          contentPadding: EdgeInsets.zero,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text(
+                  'DOWNLOAD MODEL',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDownloadingState(BuildContext context, GemmaState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Downloading AI Model...',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${(state.downloadProgress * 100).toInt()}%',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: state.downloadProgress,
+              minHeight: 6,
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.1),
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadyState(BuildContext context) {
+    return ListTile(
+      title: Row(
+        children: [
+          Text(
+            'AI Model Ready',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.check_circle_rounded, size: 18, color: Colors.greenAccent),
+        ],
+      ),
+      subtitle: Text(
+        'Model is installed and ready for offline use',
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: 11,
+        ),
+      ),
+      trailing: TextButton(
+        onPressed: () => context.read<GemmaCubit>().deleteModel(),
+        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+        child: const Text('Delete', style: TextStyle(fontSize: 11)),
+      ),
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, GemmaState state) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.redAccent,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Download Failed',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          if (state.errorMessage != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              state.errorMessage!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
+            icon: const Icon(Icons.refresh_rounded, size: 14),
+            label: const Text('Retry', style: TextStyle(fontSize: 10)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSettingsSection(
     BuildContext context,
     String title,
@@ -316,7 +537,7 @@ class _BoardPanelState extends State<BoardPanel> {
       children: [
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(0, 8, 0, 100),
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
             itemCount: state.boardIds.length,
             itemBuilder: (context, index) {
               final boardId = state.boardIds[index];
@@ -326,7 +547,7 @@ class _BoardPanelState extends State<BoardPanel> {
           ),
         ),
         _buildAddBoardButton(context),
-        const SizedBox(height: 120), // Padding for bottom toolbar
+        const SizedBox(height: 16), // A little padding so it doesn't touch the absolute edge
       ],
     );
   }

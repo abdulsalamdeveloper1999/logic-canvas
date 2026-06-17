@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logic_canvas/core/injection.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
@@ -9,6 +10,7 @@ import 'package:logic_canvas/presentation/cubits/progress/progress_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/selection/selection_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_state.dart';
+import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
 import 'package:logic_canvas/presentation/pages/home/home_page.dart';
 import 'package:logic_canvas/presentation/pages/subscription/paywall_page.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -47,6 +49,10 @@ void main() async {
     configureDependencies();
     debugPrint('💉 DI: Dependencies configured');
 
+    debugPrint('🤖 Gemma: Initializing...');
+    FlutterGemma.initialize();
+    debugPrint('🤖 Gemma: Initialized');
+
     debugPrint('🚀 App: Running LogicCanvasApp...');
     runApp(const LogicCanvasApp());
   } catch (e) {
@@ -71,6 +77,7 @@ class LogicCanvasApp extends StatelessWidget {
         BlocProvider(create: (_) => getIt<ProgressCubit>()),
         BlocProvider(create: (_) => getIt<SelectionCubit>()),
         BlocProvider(create: (_) => getIt<EntitlementsCubit>()),
+        BlocProvider(create: (_) => getIt<GemmaCubit>()..init()),
       ],
       child: BlocBuilder<SettingsCubit, SettingsState>(
         builder: (context, state) {
@@ -98,7 +105,6 @@ class LogicCanvasApp extends StatelessWidget {
               listenWhen: (prev, curr) =>
                   curr.isInitialized && !prev.isInitialized,
               listener: (context, state) {
-                // We check if DrawingCubit is also loaded
                 if (context.read<DrawingCubit>().state.isLoaded) {
                   FlutterNativeSplash.remove();
                 }
@@ -106,29 +112,39 @@ class LogicCanvasApp extends StatelessWidget {
               child: BlocListener<DrawingCubit, DrawingState>(
                 listenWhen: (prev, curr) => curr.isLoaded && !prev.isLoaded,
                 listener: (context, state) {
-                  // We check if EntitlementsCubit is also initialized
                   if (context.read<EntitlementsCubit>().state.isInitialized) {
                     FlutterNativeSplash.remove();
                   }
                 },
-                child: BlocBuilder<EntitlementsCubit, EntitlementsState>(
-                  builder: (context, entState) {
-                    return BlocBuilder<DrawingCubit, DrawingState>(
-                      builder: (context, drawState) {
-                        final bool isReady =
-                            entState.isInitialized && drawState.isLoaded;
-
-                        if (!isReady) {
-                          return const Scaffold(backgroundColor: Colors.black);
-                        }
-
-                        if (entState.isSubscribed) {
-                          return const SafeArea(child: HomePage());
-                        }
-                        return const PaywallPage();
-                      },
-                    );
+                child: BlocListener<EntitlementsCubit, EntitlementsState>(
+                  listenWhen: (prev, curr) =>
+                      curr.isInitialized &&
+                      curr.isSubscribed &&
+                      !prev.isSubscribed,
+                  listener: (context, state) {
+                    context.read<GemmaCubit>().checkAndDownload();
                   },
+                  child: BlocBuilder<EntitlementsCubit, EntitlementsState>(
+                    builder: (context, entState) {
+                      return BlocBuilder<DrawingCubit, DrawingState>(
+                        builder: (context, drawState) {
+                          final bool isReady =
+                              entState.isInitialized && drawState.isLoaded;
+
+                          if (!isReady) {
+                            return const Scaffold(
+                              backgroundColor: Colors.black,
+                            );
+                          }
+
+                          if (entState.isSubscribed) {
+                            return const SafeArea(child: HomePage());
+                          }
+                          return const PaywallPage();
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

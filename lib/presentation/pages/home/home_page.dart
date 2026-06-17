@@ -1,4 +1,6 @@
+import 'dart:developer' as developer;
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
@@ -7,8 +9,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
-import 'package:logic_canvas/presentation/widgets/whiteboard_view.dart';
+import 'package:logic_canvas/presentation/widgets/ai_hint_dialog.dart';
+import 'package:logic_canvas/presentation/widgets/app_toast.dart';
 import 'package:logic_canvas/presentation/widgets/board_panel.dart';
+import 'package:logic_canvas/presentation/widgets/whiteboard_view.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_state.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:logic_canvas/presentation/widgets/icon_picker_sheet.dart';
@@ -18,6 +22,13 @@ import 'package:logic_canvas/data/services/export_service.dart';
 import 'package:logic_canvas/presentation/widgets/upgrade_dialog.dart';
 import 'package:logic_canvas/data/datasources/static_problem_data.dart';
 import 'package:logic_canvas/domain/entities/problem.dart';
+import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/gemma/gemma_state.dart';
+
+void _llmLog(String message) {
+  debugPrintSynchronously(message);
+  developer.log(message, name: 'LogicCanvasLLM');
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,6 +39,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isDescriptionExpanded = true;
+  bool _isAiPanelOpen = false;
+  Offset _aiPanelPosition = const Offset(20, 90);
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +73,20 @@ class _HomePageState extends State<HomePage> {
                 right: 20,
                 child: _buildProblemDescriptionPanel(context),
               ),
+
+              if (_isAiPanelOpen)
+                Positioned(
+                  left: _aiPanelPosition.dx,
+                  top: _aiPanelPosition.dy,
+                  child: AiAssistantPanel(
+                    onClose: () => setState(() => _isAiPanelOpen = false),
+                    onPanUpdate: (details) {
+                      setState(() {
+                        _aiPanelPosition += details.delta;
+                      });
+                    },
+                  ),
+                ),
             ],
           );
         },
@@ -512,6 +539,31 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showAiDialog(BuildContext context) {
+    final gemmaState = context.read<GemmaCubit>().state;
+    _llmLog(
+      '🧠 HomePage._showAiDialog: status=${gemmaState.status}, '
+      'aiLoading=${gemmaState.aiLoading}, hasError=${gemmaState.aiError != null}',
+    );
+    if (gemmaState.status != GemmaStatus.ready) {
+      _llmLog('🧠 HomePage._showAiDialog: blocked because model is not ready');
+      AppToast.show(
+        context,
+        message: 'AI model not downloaded. Go to Settings → AI Model to download.',
+        actionLabel: 'Settings',
+        onAction: () {
+          context.read<SettingsCubit>().toggleSidebar();
+        },
+      );
+      return;
+    }
+
+    _llmLog('🧠 HomePage._showAiDialog: toggling AiAssistantPanel');
+    setState(() {
+      _isAiPanelOpen = !_isAiPanelOpen;
+    });
+  }
+
   Widget _buildMainIntegratedBar(BuildContext context, SettingsState settings) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(35),
@@ -853,6 +905,14 @@ class _HomePageState extends State<HomePage> {
                   () => context.read<DrawingCubit>().redo(),
                   tooltip: "Redo",
                 ),
+                const SizedBox(width: 8),
+                _topBarIconButton(
+                  context,
+                  Icons.auto_awesome_rounded,
+                  () => _showAiDialog(context),
+                  color: Colors.blueAccent.withValues(alpha: 0.9),
+                  tooltip: "AI Assistant",
+                ),
                 const SizedBox(width: 16),
 
                 // Export Button
@@ -870,15 +930,22 @@ class _HomePageState extends State<HomePage> {
     IconData icon,
     VoidCallback? onPressed, {
     String? tooltip,
+    Color? color,
   }) {
     return Material(
       color: Colors.transparent,
       child: IconButton(
         icon: Icon(
           icon,
-          color: onPressed == null
-              ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+          color:
+              color ??
+              (onPressed == null
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.1)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.8)),
           size: 22,
         ),
         onPressed: onPressed,
