@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -19,6 +20,7 @@ import 'presentation/cubits/drawing/drawing_state.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  GestureBinding.instance.resamplingEnabled = false;
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Custom Error Handling for Release Mode diagnosis
@@ -38,7 +40,7 @@ void main() async {
     await Hive.openBox('settings');
 
     debugPrint('📦 Hive: Opening drawing box...');
-    await Hive.openBox('drawing');
+    await Hive.openBox(DrawingCubit.boxName);
 
     debugPrint('📦 Hive: Opening entitlements box...');
     await Hive.openBox('entitlements');
@@ -116,35 +118,24 @@ class LogicCanvasApp extends StatelessWidget {
                     FlutterNativeSplash.remove();
                   }
                 },
-                child: BlocListener<EntitlementsCubit, EntitlementsState>(
-                  listenWhen: (prev, curr) =>
-                      curr.isInitialized &&
-                      curr.isSubscribed &&
-                      !prev.isSubscribed,
-                  listener: (context, state) {
-                    context.read<GemmaCubit>().checkAndDownload();
+                child: BlocBuilder<EntitlementsCubit, EntitlementsState>(
+                  builder: (context, entState) {
+                    return BlocBuilder<DrawingCubit, DrawingState>(
+                      builder: (context, drawState) {
+                        final bool isReady =
+                            entState.isInitialized && drawState.isLoaded;
+
+                        if (!isReady) {
+                          return const Scaffold(backgroundColor: Colors.black);
+                        }
+
+                        if (entState.isSubscribed) {
+                          return const SafeArea(child: HomePage());
+                        }
+                        return const PaywallPage();
+                      },
+                    );
                   },
-                  child: BlocBuilder<EntitlementsCubit, EntitlementsState>(
-                    builder: (context, entState) {
-                      return BlocBuilder<DrawingCubit, DrawingState>(
-                        builder: (context, drawState) {
-                          final bool isReady =
-                              entState.isInitialized && drawState.isLoaded;
-
-                          if (!isReady) {
-                            return const Scaffold(
-                              backgroundColor: Colors.black,
-                            );
-                          }
-
-                          if (entState.isSubscribed) {
-                            return const SafeArea(child: HomePage());
-                          }
-                          return const PaywallPage();
-                        },
-                      );
-                    },
-                  ),
                 ),
               ),
             ),

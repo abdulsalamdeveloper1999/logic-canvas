@@ -61,225 +61,304 @@ class _PaywallPageState extends State<PaywallPage> {
               ),
 
               SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 40),
-                      // App Identity
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.blueAccent.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.blueAccent.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.auto_fix_high_rounded,
-                              color: Colors.blueAccent,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          const Text(
-                            "LogicCanvas",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      const Text(
-                        "Elevate Your System Design",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
                         ),
-                      ),
-                      const SizedBox(height: 40),
-
-                      // Features List
-                      _buildFeatureItem(
-                        Icons.draw_rounded,
-                        "Advanced Interaction",
-                        "Shape detection & handwriting recognition.",
-                      ),
-                      const SizedBox(height: 16),
-                      _buildFeatureItem(
-                        Icons.cloud_sync_rounded,
-                        "iCloud Sync",
-                        "Your boards, synced across all devices.",
-                      ),
-                      const SizedBox(height: 16),
-                      _buildFeatureItem(
-                        Icons.picture_as_pdf_rounded,
-                        "Pro Export",
-                        "High-fidelity PDF and PNG exports.",
-                      ),
-                      const SizedBox(height: 16),
-                      _buildFeatureItem(
-                        Icons.layers_rounded,
-                        "Unlimited Boards",
-                        "Organize every problem effectively.",
-                      ),
-
-                      const Spacer(),
-
-                      // Pack Selection
-                      // Pack Selection
-                      if (state.isLoading)
-                        const Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.blueAccent,
-                          ),
-                        )
-                      else if (currentOffering != null &&
-                          currentOffering.availablePackages.isNotEmpty)
-                        Column(
-                          children: [
-                            // Show all available packages sorted by price (most expensive/annual usually first)
-                            ...currentOffering.availablePackages.reversed.map((
-                              package,
-                            ) {
-                              final isAnnual =
-                                  package.packageType == PackageType.annual;
-                              final isMonthly =
-                                  package.packageType == PackageType.monthly;
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _buildPackageCard(
-                                  package,
-                                  description: isAnnual
-                                      ? "Only £2.50/month, billed annually. Save 50%!"
-                                      : (isMonthly
-                                            ? "Flexible month-to-month access."
-                                            : null),
-                                  badge: isAnnual ? "BEST VALUE" : null,
-                                  isSelected:
-                                      _selectedPackage?.identifier ==
-                                      package.identifier,
+                        child: IntrinsicHeight(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                            ),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 40),
+                                // App Identity
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueAccent.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.blueAccent.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.auto_fix_high_rounded,
+                                        color: Colors.blueAccent,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Text(
+                                      "LogicCanvas",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -1.0,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              );
-                            }),
-                          ],
-                        )
-                      else
-                        const Column(
-                          children: [
-                            Icon(
-                              Icons.error_outline_rounded,
-                              color: Colors.redAccent,
-                              size: 48,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              "No plans available",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              "Please ensure your RevenueCat Dashboard has a 'Current' offering with products attached.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      const SizedBox(height: 32),
-
-                      // Purchase Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 64,
-                        child: ElevatedButton(
-                          onPressed:
-                              _selectedPackage != null && !state.isLoading
-                              ? () => context
-                                    .read<EntitlementsCubit>()
-                                    .purchasePackage(_selectedPackage!)
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.white10,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: state.isLoading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
+                                const SizedBox(height: 32),
+                                const Text(
+                                  "Unlock LogicCanvas Premium",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
                                     color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  _selectedPackage?.packageType ==
-                                          PackageType.annual
-                                      ? "Subscribe for ${_selectedPackage!.storeProduct.priceString}/year"
-                                      : "Subscribe for ${_selectedPackage!.storeProduct.priceString}/month",
-                                  style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 28,
                                     fontWeight: FontWeight.w800,
+                                    height: 1.2,
                                   ),
                                 ),
-                        ),
-                      ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueAccent.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Colors.blueAccent.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.psychology_alt_rounded,
+                                        color: Colors.blueAccent,
+                                        size: 22,
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          "On-device AI Coach included at no extra cost",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
 
-                      const SizedBox(height: 24),
+                                // Features List
+                                _buildFeatureItem(
+                                  Icons.auto_awesome_rounded,
+                                  "AI Coach & Clean Notes",
+                                  "Get hints, review boards, and clean notes locally.",
+                                ),
+                                const SizedBox(height: 12),
+                                _buildFeatureItem(
+                                  Icons.draw_rounded,
+                                  "Advanced Interaction",
+                                  "Shape detection & handwriting recognition.",
+                                ),
+                                const SizedBox(height: 12),
+                                _buildFeatureItem(
+                                  Icons.cloud_sync_rounded,
+                                  "iCloud Sync",
+                                  "Your boards, synced across all devices.",
+                                ),
+                                const SizedBox(height: 12),
+                                _buildFeatureItem(
+                                  Icons.picture_as_pdf_rounded,
+                                  "Pro Export",
+                                  "High-fidelity PDF and PNG exports.",
+                                ),
+                                const SizedBox(height: 12),
+                                _buildFeatureItem(
+                                  Icons.layers_rounded,
+                                  "Unlimited Boards",
+                                  "Organize every problem effectively.",
+                                ),
 
-                      // Compliance Text
-                      Text(
-                        "After the free trial, payment will be charged to your Apple ID account. Subscription automatically renews unless it is canceled at least 24 hours before the end of the current period. You can manage and cancel your subscriptions in your App Store account settings.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          fontSize: 10,
-                          height: 1.4,
-                        ),
-                      ),
+                                const Spacer(),
 
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildFooterLink("Terms of Use", () {}),
-                          _buildFooterDivider(),
-                          _buildFooterLink("Privacy Policy", () {}),
-                          _buildFooterDivider(),
-                          _buildFooterLink(
-                            "Restore",
-                            () => context.read<EntitlementsCubit>().restore(),
+                                // Pack Selection
+                                // Pack Selection
+                                if (state.isLoading)
+                                  const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.blueAccent,
+                                    ),
+                                  )
+                                else if (currentOffering != null &&
+                                    currentOffering
+                                        .availablePackages
+                                        .isNotEmpty)
+                                  Column(
+                                    children: [
+                                      // Show all available packages sorted by price (most expensive/annual usually first)
+                                      ...currentOffering
+                                          .availablePackages
+                                          .reversed
+                                          .map((package) {
+                                            final isAnnual =
+                                                package.packageType ==
+                                                PackageType.annual;
+                                            final isMonthly =
+                                                package.packageType ==
+                                                PackageType.monthly;
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 12,
+                                              ),
+                                              child: _buildPackageCard(
+                                                package,
+                                                description: isAnnual
+                                                    ? "Only £2.50/month, billed annually. Save 50%!"
+                                                    : (isMonthly
+                                                          ? "Flexible month-to-month access."
+                                                          : null),
+                                                badge: isAnnual
+                                                    ? "BEST VALUE"
+                                                    : null,
+                                                isSelected:
+                                                    _selectedPackage
+                                                        ?.identifier ==
+                                                    package.identifier,
+                                              ),
+                                            );
+                                          }),
+                                    ],
+                                  )
+                                else
+                                  const Column(
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline_rounded,
+                                        color: Colors.redAccent,
+                                        size: 48,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        "No plans available",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        "Please ensure your RevenueCat Dashboard has a 'Current' offering with products attached.",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                const SizedBox(height: 32),
+
+                                // Purchase Button
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 64,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        _selectedPackage != null &&
+                                            !state.isLoading
+                                        ? () => context
+                                              .read<EntitlementsCubit>()
+                                              .purchasePackage(
+                                                _selectedPackage!,
+                                              )
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueAccent,
+                                      foregroundColor: Colors.white,
+                                      disabledBackgroundColor: Colors.white10,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: state.isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : Text(
+                                            _selectedPackage?.packageType ==
+                                                    PackageType.annual
+                                                ? "Subscribe for ${_selectedPackage!.storeProduct.priceString}/year"
+                                                : "Subscribe for ${_selectedPackage!.storeProduct.priceString}/month",
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                // Compliance Text
+                                Text(
+                                  "After the free trial, payment will be charged to your Apple ID account. Subscription automatically renews unless it is canceled at least 24 hours before the end of the current period. You can manage and cancel your subscriptions in your App Store account settings.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    fontSize: 10,
+                                    height: 1.4,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _buildFooterLink("Terms of Use", () {}),
+                                    _buildFooterDivider(),
+                                    _buildFooterLink("Privacy Policy", () {}),
+                                    _buildFooterDivider(),
+                                    _buildFooterLink(
+                                      "Restore",
+                                      () => context
+                                          .read<EntitlementsCubit>()
+                                          .restore(),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -427,7 +506,9 @@ class _PaywallPageState extends State<PaywallPage> {
                   ],
                   const SizedBox(height: 4),
                   Text(
-                    isAnnual ? "Includes 1-week free trial" : "Includes 3-days free trial",
+                    isAnnual
+                        ? "Includes 1-week free trial"
+                        : "Includes 3-days free trial",
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 12,

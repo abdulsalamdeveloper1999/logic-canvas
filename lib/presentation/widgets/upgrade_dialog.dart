@@ -15,7 +15,7 @@ class UpgradeDialog {
           backgroundColor: Theme.of(context).colorScheme.surface,
           title: const Text('Premium Access'),
           content: const Text(
-            'Premium unlocks smart drawing tools (handwriting + shape recognition) and the full architectural icon library.',
+            'Premium unlocks smart drawing tools, the full icon library, iCloud sync, pro exports, and on-device AI Coach at no extra cost.',
           ),
           actions: [
             TextButton(

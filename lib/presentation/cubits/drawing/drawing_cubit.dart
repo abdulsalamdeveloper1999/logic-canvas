@@ -2,6 +2,7 @@ import 'package:logic_canvas/domain/entities/problem.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import 'package:logic_canvas/domain/entities/stroke.dart';
@@ -13,11 +14,12 @@ import 'package:logic_canvas/data/services/icloud_sync_service.dart';
 
 @injectable
 class DrawingCubit extends Cubit<DrawingState> {
-  static const String _boxName = 'drawing';
+  static const String boxName = 'drawing_v3';
   static const String _stateKey = 'drawing_state_v2';
   final HandwritingRecognitionService _handwritingService;
   final MLShapeService _mlShapeService;
   Timer? _recognitionTimer;
+  Timer? _saveTimer;
   final List<int> _pendingStrokeIndices = [];
   final ICloudSyncService _icloudSyncService;
   bool _isSyncEnabled = false;
@@ -38,7 +40,7 @@ class DrawingCubit extends Cubit<DrawingState> {
       _isSyncEnabled = settingsMap['isICloudSyncEnabled'] as bool? ?? false;
     }
 
-    final box = await Hive.openBox(_boxName);
+    final box = await Hive.openBox(boxName);
     final storedData = box.get(_stateKey);
     if (storedData != null) {
       final Map<String, dynamic> data = Map<String, dynamic>.from(storedData);
@@ -73,32 +75,36 @@ class DrawingCubit extends Cubit<DrawingState> {
       emit(state.copyWith(isLoaded: true));
     }
 
-    // Auto-download from cloud on launch if enabled
-    if (_isSyncEnabled) {
-      syncFromCloud();
-    }
+    // Cloud sync is manual-only. Avoid doing iCloud work during app launch or
+    // drawing; users can pull from iCloud with the Download button.
   }
 
-  Future<void> _saveState() async {
-    final box = await Hive.openBox(_boxName);
-    final Map<String, dynamic> boardsJson = {};
-    state.boards.forEach((key, value) {
-      boardsJson[key] = value.map((s) => s.toJson()).toList();
-    });
+  static Map<String, dynamic> _encodeStateToMap(DrawingState state) {
+    return state.toJson();
+  }
 
-    await box.put(_stateKey, {
-      'boards': boardsJson,
-      'activeBoardId': state.activeBoardId,
-      'boardIds': state.boardIds,
-      'boardProblems': state.boardProblems,
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 800), () {
+      _performSave();
     });
+  }
 
-    // Auto-sync to cloud if enabled
-    syncToCloud();
+  Future<void> _performSave() async {
+    final box = await Hive.openBox(boxName);
+
+    // Offload heavy JSON serialization to a background thread to prevent UI freezing
+    final Map<String, dynamic> data = await compute(_encodeStateToMap, state);
+
+    await box.put(_stateKey, data);
   }
 
   void setSyncEnabled(bool enabled) {
     _isSyncEnabled = enabled;
+  }
+
+  void persistState() {
+    _scheduleSave();
   }
 
   Future<void> syncToCloud() async {
@@ -106,7 +112,7 @@ class DrawingCubit extends Cubit<DrawingState> {
     await _icloudSyncService.syncToCloud(state.toJson());
   }
 
-  Future<void> syncFromCloud() async {
+  Future<bool> syncFromCloud() async {
     final cloudData = await _icloudSyncService.downloadFromCloud();
     if (cloudData != null) {
       final Map<String, dynamic> data = Map<String, dynamic>.from(cloudData);
@@ -137,8 +143,10 @@ class DrawingCubit extends Cubit<DrawingState> {
           selectedStrokeIndex: null,
         ),
       );
-      await _saveState();
+      _scheduleSave();
+      return true;
     }
+    return false;
   }
 
   // --- Board Management ---
@@ -162,7 +170,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void createNewBoardFromTemplate(Problem problem, Color textColor) {
@@ -215,7 +223,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void switchToBoard(String boardId) {
@@ -227,7 +235,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void deleteBoard(String boardId) {
@@ -251,7 +259,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void renameBoard(String oldId, String newId) {
@@ -285,7 +293,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         activeBoardId: nextActiveId,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   // --- Drawing Actions ---
@@ -307,7 +315,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void selectStroke(int? index) {
@@ -331,7 +339,6 @@ class DrawingCubit extends Cubit<DrawingState> {
     updatedBoards[state.activeBoardId] = strokes;
 
     emit(state.copyWith(boards: updatedBoards));
-    _saveState();
   }
 
   void updateStrokeAt(int index, Stroke stroke) {
@@ -343,7 +350,36 @@ class DrawingCubit extends Cubit<DrawingState> {
     updatedBoards[state.activeBoardId] = strokes;
 
     emit(state.copyWith(boards: updatedBoards));
-    _saveState();
+  }
+
+  void moveStrokesBy(Set<int> indices, Offset delta) {
+    if (indices.isEmpty || delta == Offset.zero) return;
+
+    final strokes = List<Stroke>.from(activeStrokes);
+    var didMove = false;
+
+    for (final index in indices) {
+      if (index < 0 || index >= strokes.length) continue;
+
+      final stroke = strokes[index];
+      strokes[index] = stroke.copyWith(
+        points: stroke.points.map((point) => point + delta).toList(),
+      );
+      didMove = true;
+    }
+
+    if (!didMove) return;
+
+    final updatedBoards = Map<String, List<Stroke>>.from(state.boards);
+    updatedBoards[state.activeBoardId] = strokes;
+
+    emit(
+      state.copyWith(
+        boards: updatedBoards,
+        redoStack: [],
+        selectedStrokeIndex: null,
+      ),
+    );
   }
 
   void removeStrokeAt(int index) {
@@ -361,7 +397,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void startStroke() {
@@ -377,6 +413,7 @@ class DrawingCubit extends Cubit<DrawingState> {
     bool enableShapeDetection, {
     bool enableHandwriting = false,
   }) async {
+    final startMicros = DateTime.now().microsecondsSinceEpoch;
     if (!state.isDrawing) return;
 
     if (stroke == null) {
@@ -384,17 +421,24 @@ class DrawingCubit extends Cubit<DrawingState> {
       return;
     }
 
-    var finalStroke = stroke;
     final updatedStrokes = List<Stroke>.from(activeStrokes);
     final lastIdx = updatedStrokes.length;
-    updatedStrokes.add(finalStroke);
+    updatedStrokes.add(stroke);
+    // debugPrint(
+    //   'INK CUBIT: endStroke begin idx=$lastIdx type=${stroke.type.name} points=${stroke.points.length} shape=$enableShapeDetection handwriting=$enableHandwriting',
+    // );
 
-    if (enableHandwriting && !finalStroke.isEraser) {
+    if (enableHandwriting && !stroke.isEraser) {
       _pendingStrokeIndices.add(lastIdx);
 
       final updatedBoards = Map<String, List<Stroke>>.from(state.boards);
       updatedBoards[state.activeBoardId] = updatedStrokes;
       emit(state.copyWith(boards: updatedBoards, isDrawing: false));
+      final emitMs =
+          ((DateTime.now().microsecondsSinceEpoch - startMicros) / 1000)
+              .toStringAsFixed(1);
+      // debugPrint('INK CUBIT: emitted handwriting stroke after ${emitMs}ms');
+      _scheduleSave();
 
       _recognitionTimer?.cancel();
       _recognitionTimer = Timer(const Duration(milliseconds: 800), () async {
@@ -403,22 +447,44 @@ class DrawingCubit extends Cubit<DrawingState> {
       return;
     }
 
-    if (enableShapeDetection &&
-        !finalStroke.isEraser &&
-        finalStroke.points.length > 10) {
-      final detectedType = await _mlShapeService.detectShape(
-        finalStroke.points,
-      );
-      if (detectedType != StrokeType.pen) {
-        finalStroke = finalStroke.copyWith(type: detectedType);
-        updatedStrokes[lastIdx] = finalStroke;
-      }
-    }
-
     final updatedBoards = Map<String, List<Stroke>>.from(state.boards);
     updatedBoards[state.activeBoardId] = updatedStrokes;
     emit(state.copyWith(boards: updatedBoards, isDrawing: false));
-    await _saveState();
+    final emitMs =
+        ((DateTime.now().microsecondsSinceEpoch - startMicros) / 1000)
+            .toStringAsFixed(1);
+    // debugPrint('INK CUBIT: emitted stroke after ${emitMs}ms');
+    _scheduleSave();
+
+    if (enableShapeDetection && !stroke.isEraser && stroke.points.length > 10) {
+      // debugPrint('INK CUBIT: shape detection scheduled idx=$lastIdx');
+      unawaited(_processShapeDetection(lastIdx, stroke));
+    }
+  }
+
+  Future<void> _processShapeDetection(int strokeIndex, Stroke stroke) async {
+    final startMicros = DateTime.now().microsecondsSinceEpoch;
+    final detectedType = await _mlShapeService.detectShape(stroke.points);
+    if (detectedType == StrokeType.pen || isClosed) return;
+
+    final strokes = List<Stroke>.from(activeStrokes);
+    if (strokeIndex < 0 || strokeIndex >= strokes.length) return;
+    if (!identical(strokes[strokeIndex], stroke) &&
+        strokes[strokeIndex] != stroke) {
+      return;
+    }
+
+    strokes[strokeIndex] = stroke.copyWith(type: detectedType);
+    final updatedBoards = Map<String, List<Stroke>>.from(state.boards);
+    updatedBoards[state.activeBoardId] = strokes;
+    emit(state.copyWith(boards: updatedBoards));
+    _scheduleSave();
+    final totalMs =
+        ((DateTime.now().microsecondsSinceEpoch - startMicros) / 1000)
+            .toStringAsFixed(1);
+    // debugPrint(
+    //   'INK CUBIT: shape converted idx=$strokeIndex type=${detectedType.name} after ${totalMs}ms',
+    // );
   }
 
   Future<void> _processHandwriting() async {
@@ -464,7 +530,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         final updatedBoards = Map<String, List<Stroke>>.from(state.boards);
         updatedBoards[state.activeBoardId] = updatedStrokes;
         emit(state.copyWith(boards: updatedBoards));
-        await _saveState();
+        _scheduleSave();
       }
     }
     _pendingStrokeIndices.clear();
@@ -485,7 +551,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void redo() {
@@ -505,7 +571,7 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   void clear() {
@@ -518,12 +584,13 @@ class DrawingCubit extends Cubit<DrawingState> {
         selectedStrokeIndex: null,
       ),
     );
-    _saveState();
+    _scheduleSave();
   }
 
   @override
   Future<void> close() {
     _recognitionTimer?.cancel();
+    _saveTimer?.cancel();
     return super.close();
   }
 }

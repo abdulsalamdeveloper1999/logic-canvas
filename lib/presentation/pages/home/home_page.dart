@@ -549,7 +549,8 @@ class _HomePageState extends State<HomePage> {
       _llmLog('🧠 HomePage._showAiDialog: blocked because model is not ready');
       AppToast.show(
         context,
-        message: 'AI model not downloaded. Go to Settings → AI Model to download.',
+        message:
+            'AI model not downloaded. Go to Settings → AI Model to download.',
         actionLabel: 'Settings',
         onAction: () {
           context.read<SettingsCubit>().toggleSidebar();
@@ -606,6 +607,14 @@ class _HomePageState extends State<HomePage> {
                 () => context.read<SettingsCubit>().setToolMode(ToolMode.hand),
                 settings.toolMode == ToolMode.hand,
                 tooltip: "Hand (Pan)",
+              ),
+              _toolbarButton(
+                context,
+                Icons.select_all_rounded,
+                () =>
+                    context.read<SettingsCubit>().setToolMode(ToolMode.select),
+                settings.toolMode == ToolMode.select,
+                tooltip: "Select & Move",
               ),
               _toolbarButton(
                 context,

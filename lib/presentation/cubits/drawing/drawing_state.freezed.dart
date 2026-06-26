@@ -21,8 +21,7 @@ mixin _$DrawingState {
   String get activeBoardId => throw _privateConstructorUsedError;
   List<String> get boardIds => throw _privateConstructorUsedError;
   List<Stroke> get redoStack => throw _privateConstructorUsedError;
-  Map<String, String?> get boardProblems =>
-      throw _privateConstructorUsedError; // boardId -> problemId
+  Map<String, String?> get boardProblems => throw _privateConstructorUsedError;
   bool get isDrawing => throw _privateConstructorUsedError;
   bool get isLoaded => throw _privateConstructorUsedError;
   int? get selectedStrokeIndex => throw _privateConstructorUsedError;
@@ -253,7 +252,6 @@ class _$DrawingStateImpl extends _DrawingState {
     return EqualUnmodifiableMapView(_boardProblems);
   }
 
-  // boardId -> problemId
   @override
   @JsonKey()
   final bool isDrawing;
@@ -267,44 +265,6 @@ class _$DrawingStateImpl extends _DrawingState {
   String toString() {
     return 'DrawingState(boards: $boards, activeBoardId: $activeBoardId, boardIds: $boardIds, redoStack: $redoStack, boardProblems: $boardProblems, isDrawing: $isDrawing, isLoaded: $isLoaded, selectedStrokeIndex: $selectedStrokeIndex)';
   }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$DrawingStateImpl &&
-            const DeepCollectionEquality().equals(other._boards, _boards) &&
-            (identical(other.activeBoardId, activeBoardId) ||
-                other.activeBoardId == activeBoardId) &&
-            const DeepCollectionEquality().equals(other._boardIds, _boardIds) &&
-            const DeepCollectionEquality().equals(
-              other._redoStack,
-              _redoStack,
-            ) &&
-            const DeepCollectionEquality().equals(
-              other._boardProblems,
-              _boardProblems,
-            ) &&
-            (identical(other.isDrawing, isDrawing) ||
-                other.isDrawing == isDrawing) &&
-            (identical(other.isLoaded, isLoaded) ||
-                other.isLoaded == isLoaded) &&
-            (identical(other.selectedStrokeIndex, selectedStrokeIndex) ||
-                other.selectedStrokeIndex == selectedStrokeIndex));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    const DeepCollectionEquality().hash(_boards),
-    activeBoardId,
-    const DeepCollectionEquality().hash(_boardIds),
-    const DeepCollectionEquality().hash(_redoStack),
-    const DeepCollectionEquality().hash(_boardProblems),
-    isDrawing,
-    isLoaded,
-    selectedStrokeIndex,
-  );
 
   /// Create a copy of DrawingState
   /// with the given fields replaced by the non-null parameter values.
@@ -337,7 +297,7 @@ abstract class _DrawingState extends DrawingState {
   @override
   List<Stroke> get redoStack;
   @override
-  Map<String, String?> get boardProblems; // boardId -> problemId
+  Map<String, String?> get boardProblems;
   @override
   bool get isDrawing;
   @override

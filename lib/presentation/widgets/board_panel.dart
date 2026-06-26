@@ -9,6 +9,7 @@ import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_state.dart';
+import 'package:logic_canvas/presentation/widgets/app_toast.dart';
 
 class BoardPanel extends StatefulWidget {
   const BoardPanel({super.key});
@@ -21,11 +22,47 @@ class _BoardPanelState extends State<BoardPanel> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final Set<String> _expandedCategories = {};
+  bool _isDownloadingFromCloud = false;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _downloadFromICloud() async {
+    if (_isDownloadingFromCloud) return;
+
+    setState(() => _isDownloadingFromCloud = true);
+    AppToast.show(
+      context,
+      message: 'Downloading from iCloud. You will be notified when it is done.',
+      duration: const Duration(seconds: 3),
+    );
+
+    try {
+      final downloaded = await context.read<DrawingCubit>().syncFromCloud();
+      if (!mounted) return;
+
+      AppToast.show(
+        context,
+        message: downloaded
+            ? 'iCloud download complete. Your boards are up to date.'
+            : 'No iCloud backup was found, or the download failed.',
+        duration: const Duration(seconds: 4),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        message: 'iCloud download failed. Please try again.',
+        duration: const Duration(seconds: 4),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingFromCloud = false);
+      }
+    }
   }
 
   @override
@@ -115,9 +152,6 @@ class _BoardPanelState extends State<BoardPanel> {
                 onChanged: (val) {
                   context.read<SettingsCubit>().toggleICloudSync();
                   context.read<DrawingCubit>().setSyncEnabled(val);
-                  if (val) {
-                    context.read<DrawingCubit>().syncToCloud();
-                  }
                 },
                 secondary: Icon(
                   Icons.cloud_sync_rounded,
@@ -156,9 +190,16 @@ class _BoardPanelState extends State<BoardPanel> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () =>
-                          context.read<DrawingCubit>().syncFromCloud(),
-                      icon: const Icon(Icons.download_rounded, size: 16),
+                      onPressed: _isDownloadingFromCloud
+                          ? null
+                          : _downloadFromICloud,
+                      icon: _isDownloadingFromCloud
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded, size: 16),
                       label: const Text(
                         'DOWNLOAD',
                         style: TextStyle(
@@ -547,7 +588,9 @@ class _BoardPanelState extends State<BoardPanel> {
           ),
         ),
         _buildAddBoardButton(context),
-        const SizedBox(height: 16), // A little padding so it doesn't touch the absolute edge
+        const SizedBox(
+          height: 16,
+        ), // A little padding so it doesn't touch the absolute edge
       ],
     );
   }

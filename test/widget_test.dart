@@ -11,6 +11,7 @@ import 'package:hive/hive.dart';
 
 import 'package:logic_canvas/core/injection.dart';
 import 'package:logic_canvas/main.dart';
+import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +20,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('logic_canvas_test_');
     Hive.init(dir.path);
     await Hive.openBox<bool>('progress');
-    await Hive.openBox('drawing');
+    await Hive.openBox(DrawingCubit.boxName);
     await Hive.openBox('settings');
     configureDependencies();
   });

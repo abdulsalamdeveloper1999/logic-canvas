@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sliding Window Visualizer - Longest Repeating Character Replacement</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --card-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent-color: #4caf50;
+            --highlight-color: #ffeb3b;
+            --pointer-color: #ff5722;
+            --border-color: #444;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #aaa;
+            margin-bottom: 30px;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        /* Visualization Area */
+        .visualizer-container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .string-container {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 40px;
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        .char-box {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .char-box.active {
+            border-color: var(--accent-color);
+            background-color: rgba(76, 175, 80, 0.2);
+        }
+
+        .pointer-container {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: -10px;
+            position: relative;
+        }
+
+        .pointer {
+            width: 40px;
+            /* Matches the char-box width exactly */
+            font-size: 0.8rem;
+            color: var(--pointer-color);
+            font-weight: bold;
+            text-align: center;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+
+        /* Stats Area */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #aaa;
+            display: block;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--highlight-color);
+        }
+
+        .freq-map {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            min-width: 150px;
+        }
+
+        .freq-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .freq-table th, .freq-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: center;
+        }
+
+        .freq-table th {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--accent-color);
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+
+        .explanation {
+            margin-top: 30px;
+            padding: 15px;
+            border-left: 4px solid var(--accent-color);
+            background: rgba(255, 255, 255, 0.05);
+            min-height: 50px;
+        }
+
+        .highlight-text {
+            color: var(--highlight-color);
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Longest Repeating Character Replacement</h1>
+    <p>
+        LeetCode 424: Given a string <code>s</code> and an integer <code>k</code>, return the length of the longest
+        substring
+        containting the same letter after replacing at most <code>k</code> characters.
+    </p>
+
+    <div class="visualizer-container">
+        <div class="string-container" id="stringContainer"></div>
+        <div class="pointer-container" id="pointerContainer"></div>
+
+        <div class="dashboard">
+            <div class="stat-item"><span class="stat-label">Left</span><span class="stat-value" id="val-left">-</span>
+            </div>
+            <div class="stat-item"><span class="stat-label">Right</span><span class="stat-value" id="val-right">-</span>
+            </div>
+            <div class="stat-item"><span class="stat-label">Window Size</span><span class="stat-value"
+                    id="val-size">-</span></div>
+            <div class="stat-item"><span class="stat-label">maxFreq</span><span class="stat-value"
+                    id="val-maxFreq">-</span></div>
+            <div class="stat-item"><span class="stat-label">Replacements Needed</span><span class="stat-value"
+                    id="val-repl">-</span></div>
+            <div class="stat-item"><span class="stat-label">k (Limit)</span><span class="stat-value" id="val-k">-</span>
+            </div>
+            <div class="stat-item"><span class="stat-label">MaxLength</span><span class="stat-value"
+                    id="val-maxLen">-</span></div>
+        </div>
+
+        <div class="freq-map">
+            Frequency Map:
+            <table class="freq-table" id="freqTable">
+                <thead>
+                    <tr><th>Char</th><th>Count</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="controls">
+            <button id="btnPrev">Previous</button>
+            <button id="btnNext">Next Step</button>
+            <button id="btnPlay">Auto Play</button>
+            <button id="btnPause">Pause</button>
+            <button id="btnReset">Reset</button>
+        </div>
+
+        <div class="explanation" id="explanation">
+            Click "Next Step" to start the algorithm.
+        </div>
+    </div>
+
+    <script>
+        /**
+         * INPUTS
+         */
+        const s = "AABABBA";
+        const k = 1;
+
+        /**
+         * STATE MANAGEMENT
+         * We store every single step of the algorithm in a history array.
+         * This allows us to move backward and forward easily.
+         */
+        let history = [];
+        let currentStep = 0;
+        let isPlaying = false;
+        let timer = null;
+
+        /**
+         * ALGORITHM GENERATOR
+         * This function runs the logic once and captures "snapshots" of the variables
+         * at every significant change.
+         */
+        function generateHistory() {
+            const steps = [];
+            let left = 0;
+            let maxFreq = 0;
+            let maxLength = 0;
+            let count = {};
+
+            // Initial state
+            steps.push({
+                left, right: -1, maxFreq, maxLength, count: { ...count },
+                explanation: "Starting state. Pointers at -1.",
+                window: []
+            });
+
+            for (let right = 0; right < s.length; right++) {
+                const char = s[right];
+                count[char] = (count[char] || 0) + 1;
+
+                steps.push({
+                    left, right, maxFreq, maxLength, count: { ...count },
+                    explanation: `Added <span class="highlight-text"> '${char}'</span> to the window at index ${right}.`,
+                    window: Array.from({ length: right + 1 }, (_, i) => i).filter(i => i >= left)
+                });
+
+                maxFreq = Math.max(maxFreq, count[char]);
+
+                if (maxFreq > count[char]) {
+                    steps.push({
+                        left, right, maxFreq, maxLength, count: { ...count },
+                        explanation: `Updated <span class="highlight-text">maxFreq</span> to ${maxFreq}.`,
+                        window: Array.from({ length: right + 1 }, (_, i) => i).filter(i => i >= left)
+                    });
+                }
+
+                // Sliding Window Logic:
+                // If (window size - max frequency) > k, it means we have too many 
+                // different characters to replace, so we shrink the window from the left.
+                while ((right - left + 1) - maxFreq > k) {
+                    steps.push({
+                        left, right, maxFreq, maxLength, count: { ...count },
+                        explanation: `Window invalid (replacements > ${k}). Moving <span class="highlight-text">left</span> pointer forward.`,
+                        window: Array.from({ length: right + 1 }, (_, i) => i).filter(i => i >= left)
+                    });
+
+                    count[s[left]]--;
+                    left++;
+
+                    steps.push({
+                        left, right, maxFreq, maxLength, count: { ...count },
+                        explanation: `Moved <span class="highlight-text">left</span> to ${left}.`,
+                        window: Array.from({ length: right + 1 }, (_, i) => i).filter(i => i >= left)
+                    });
+                }
+
+                maxLength = Math.max(maxLength, right - left + 1);
+                steps.push({
+                    left, right, maxFreq, maxLength, count: { ...count },
+                    explanation: `Updated <span class="highlight-text">maxLength</span> to ${maxLength}.`,
+                    window: Array.from({ length: right + 1 }, (_, i) => i).filter(i => i >= left)
+                });
+            }
+            return steps;
+        }
+
+        /**
+         * UI RENDERING
+         */
+        const stringContainer = document.getElementById('stringContainer');
+        const pointerContainer = document.getElementById('pointerContainer');
+
+        // Initialize character boxes
+        function initUI() {
+            stringContainer.innerHTML = '';
+            pointerContainer.innerHTML = '';
+            s.split('').forEach((char, i) => {
+                // Create character box
+                const box = document.createElement('div');
+                box.className = 'char-box';
+                box.id = `char-${i}`;
+                box.innerText = char;
+                stringContainer.appendChild(box);
+
+                // Create pointer box (created for every index to maintain spacing)
+                const ptr = document.createElement('div');
+                ptr.className = 'pointer';
+                ptr.id = `ptr-${i}`;
+                ptr.innerText = '';
+                pointerContainer.appendChild(ptr);
+            });
+        }
+
+
+        function updateUI(stepIdx) {
+            const state = history[stepIdx];
+            if (!state) return;
+
+            // Update Values
+            document.getElementById('val-left').innerText = state.left;
+            document.getElementById('val-right').innerText = state.right === -1 ? "None" : state.right;
+            document.getElementById('val-size').innerText = state.window.length;
+            document.getElementById('val-maxFreq').innerText = state.maxFreq;
+            document.getElementById('val-repl').innerText = state.window.length - state.maxFreq;
+            document.getElementById('val-k').innerText = k;
+            document.getElementById('val-maxLen').innerText = state.maxLength;
+
+            // Update Freq Map Table
+            const tableBody = document.querySelector('#freqTable tbody');
+            tableBody.innerHTML = ''; // Clear previous rows
+            
+            Object.entries(state.count).forEach(([char, count]) => {
+                const row = `<tr><td>${char}</td><td>${count}</td></tr>`;
+                tableBody.innerHTML += row;
+            });
+
+            // Update Window Highlighting
+            for (let i = 0; i < s.length; i++) {
+                const box = document.getElementById(`char-${i}`);
+                if (state.window.includes(i)) {
+                    box.classList.add('active');
+                } else {
+                    box.classList.remove('active');
+                }
+            }
+
+            // Update Pointers
+            // Clear all labels first
+            document.querySelectorAll('.pointer').forEach(p => p.innerText = '');
+            if (state.right !== -1) {
+                const rightPtr = document.getElementById(`ptr-${state.right}`);
+                rightPtr.innerText = 'R';
+            }
+            if (state.left !== -1 && state.left < s.length) {
+                const leftPtr = document.getElementById(`ptr-${state.left}`);
+                leftPtr.innerText = 'L';
+            }
+
+            // Update Explanation
+            document.getElementById('explanation').innerHTML = state.explanation;
+        }
+
+        /**
+         * CONTROLS
+         */
+        function init() {
+            history = generateHistory();
+            initUI();
+            updateUI(0);
+        }
+
+        document.getElementById('btnNext').addEventListener('click', () => {
+            if (currentStep < history.length - 1) {
+                currentStep++;
+                updateUI(currentStep);
+            }
+        });
+
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                updateUI(currentStep);
+            }
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            currentStep = 0;
+            isPlaying = false;
+            clearInterval(timer);
+            updateUI(0);
+        });
+
+        document.getElementById('btnPlay').addEventListener('click', () => {
+            if (!isPlaying) {
+                isPlaying = true;
+                timer = setInterval(() => {
+                    if (currentStep < history.length - 1) {
+                        currentStep++;
+                        updateUI(currentStep);
+                    } else {
+                        clearInterval(timer);
+                        isPlaying = false;
+                    }
+                }, 800);
+            }
+        });
+
+        document.getElementById('btnPause').addEventListener('click', () => {
+            isPlaying = false;
+            clearInterval(timer);
+        });
+
+        // Start the app
+        init();
+    </script>
+</body>
+
+</html>

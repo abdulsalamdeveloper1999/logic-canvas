@@ -118,4 +118,4 @@ extension SettingsStateX on SettingsState {
 
 enum BackgroundPattern { none, grid, lines }
 
-enum ToolMode { pen, eraser, hand, diagram, connector }
+enum ToolMode { pen, eraser, hand, select, diagram, connector }

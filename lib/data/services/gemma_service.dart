@@ -14,6 +14,8 @@ const String _kModelUrl =
     'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm';
 
 const ModelType _kModelType = ModelType.gemma4;
+const int _kMaxContextMessages = 8;
+const int _kMaxContextCharacters = 6000;
 
 void _llmLog(String message) {
   debugPrintSynchronously(message);
@@ -100,6 +102,7 @@ class GemmaService {
     required void Function(String token) onThinkingToken,
     required void Function(String token) onResponseToken,
     Uint8List? imageBytes,
+    bool includeHistory = true,
   }) async {
     _llmLog('🧠 GemmaService.generateResponseStream: start');
 
@@ -115,9 +118,12 @@ class GemmaService {
     // Flatten history into the user message to prevent native LiteRT-LM segfaults
     // from multiple addQueryChunk calls or 'isUser: false' chunks.
     final promptBuffer = StringBuffer();
-    if (_history.isNotEmpty) {
+    final contextHistory = includeHistory
+        ? _trimmedHistoryForPrompt()
+        : const <Message>[];
+    if (contextHistory.isNotEmpty) {
       promptBuffer.writeln("--- Previous Conversation Context ---");
-      for (final msg in _history) {
+      for (final msg in contextHistory) {
         final role = msg.isUser ? "User" : "AI";
         promptBuffer.writeln("$role: ${msg.text}");
       }
@@ -129,7 +135,11 @@ class GemmaService {
     final String finalQuery = promptBuffer.toString();
 
     final message = imageBytes != null
-        ? Message.withImage(text: finalQuery, imageBytes: imageBytes, isUser: true)
+        ? Message.withImage(
+            text: finalQuery,
+            imageBytes: imageBytes,
+            isUser: true,
+          )
         : Message.text(text: finalQuery, isUser: true);
     await chat.addQueryChunk(message);
     _llmLog('🧠 GemmaService.generateResponseStream: user chunk added');
@@ -146,10 +156,13 @@ class GemmaService {
         }
       }
 
-      // Save context
-      _history.add(Message.text(text: userMessage, isUser: true));
-      _history.add(Message.text(text: fullResponseBuffer.toString(), isUser: false));
-
+      if (includeHistory) {
+        _history.add(Message.text(text: userMessage, isUser: true));
+        _history.add(
+          Message.text(text: fullResponseBuffer.toString(), isUser: false),
+        );
+        _trimStoredHistory();
+      }
     } catch (e, stackTrace) {
       _llmLog('🧠 GemmaService.generateResponseStream: ERROR $e');
       _llmLog('🧠 GemmaService.generateResponseStream: STACK $stackTrace');
@@ -177,6 +190,30 @@ class GemmaService {
         );
       },
     );
+  }
+
+  List<Message> _trimmedHistoryForPrompt() {
+    var totalCharacters = 0;
+    final kept = <Message>[];
+
+    for (final message in _history.reversed) {
+      final messageLength = message.text.length;
+      if (kept.length >= _kMaxContextMessages ||
+          totalCharacters + messageLength > _kMaxContextCharacters) {
+        break;
+      }
+      kept.add(message);
+      totalCharacters += messageLength;
+    }
+
+    return kept.reversed.toList();
+  }
+
+  void _trimStoredHistory() {
+    final kept = _trimmedHistoryForPrompt();
+    _history
+      ..clear()
+      ..addAll(kept);
   }
 
   void dispose() {

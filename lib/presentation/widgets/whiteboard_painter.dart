@@ -10,6 +10,7 @@ class WhiteboardPainter extends CustomPainter {
 
   final List<Stroke> strokes;
   final Stroke? activeStroke;
+  final int activeStrokeRevision;
   final BackgroundPattern pattern;
   final ThemeMode themeMode;
   final Offset? hoverPosition;
@@ -19,11 +20,15 @@ class WhiteboardPainter extends CustomPainter {
   final Offset panOffset;
   final double zoomLevel;
   final int? selectedStrokeIndex;
+  final Rect? selectionRect;
+  final Rect? selectedGroupBounds;
   final Map<String, PictureInfo>? svgPictures;
 
   WhiteboardPainter({
+    super.repaint,
     required this.strokes,
     this.activeStroke,
+    this.activeStrokeRevision = 0,
     required this.pattern,
     required this.themeMode,
     this.hoverPosition,
@@ -33,23 +38,58 @@ class WhiteboardPainter extends CustomPainter {
     required this.panOffset,
     required this.zoomLevel,
     this.selectedStrokeIndex,
+    this.selectionRect,
+    this.selectedGroupBounds,
     this.svgPictures,
   });
 
+  Paint _getStrokePaint(Color color, double width, bool isEraser) {
+    return Paint()
+      ..color = isEraser ? Colors.transparent : color
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke
+      ..blendMode = isEraser ? BlendMode.clear : BlendMode.srcOver;
+  }
+
+  Paint _getDotPaint(Color color, bool isEraser) {
+    return Paint()
+      ..color = isEraser ? Colors.transparent : color
+      ..style = PaintingStyle.fill
+      ..blendMode = isEraser ? BlendMode.clear : BlendMode.srcOver;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    // Isolate BlendMode.clear so it doesn't punch a hole through the background grid.
+    final hasEraser =
+        strokes.any((s) => s.isEraser) || (activeStroke?.isEraser ?? false);
+    if (hasEraser) {
+      canvas.saveLayer(Offset.zero & size, Paint());
+    }
+
     // 1. Apply Transformation for strokes
     canvas.save();
     canvas.translate(panOffset.dx, panOffset.dy);
     canvas.scale(zoomLevel);
 
-    // 2. Draw strokes + active stroke in ONE layer so eraser clears in real time.
-    canvas.saveLayer(null, Paint());
-    _drawStrokes(canvas, size, strokes);
+    _drawStrokes(canvas, size, strokes, isActive: false);
     if (activeStroke != null) {
-      _drawStrokes(canvas, size, [activeStroke!]);
+      _drawStrokes(
+        canvas,
+        size,
+        [activeStroke!],
+        isActive: true,
+      );
     }
-    canvas.restore();
+
+    if (selectionRect != null) {
+      _drawSelectionOverlay(canvas, selectionRect!, fill: true);
+    }
+    if (selectedGroupBounds != null) {
+      _drawSelectionOverlay(canvas, selectedGroupBounds!, fill: false);
+    }
 
     canvas.restore();
 
@@ -57,70 +97,108 @@ class WhiteboardPainter extends CustomPainter {
     if (hoverPosition != null) {
       _drawHoverCursor(canvas, size);
     }
+
+    if (hasEraser) {
+      canvas.restore();
+    }
+  }
+
+  void _drawSelectionOverlay(Canvas canvas, Rect rect, {required bool fill}) {
+    final normalized = Rect.fromLTRB(
+      math.min(rect.left, rect.right),
+      math.min(rect.top, rect.bottom),
+      math.max(rect.left, rect.right),
+      math.max(rect.top, rect.bottom),
+    );
+    final strokeWidth = 1.5 / zoomLevel.clamp(0.1, 5.0);
+    final color = themeMode == ThemeMode.dark
+        ? Colors.lightBlueAccent
+        : Colors.blueAccent;
+
+    if (fill) {
+      final fillPaint = Paint()
+        ..color = color.withValues(alpha: 0.10)
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(normalized, fillPaint);
+    }
+
+    final borderPaint = Paint()
+      ..color = color.withValues(alpha: fill ? 0.9 : 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawRect(normalized, borderPaint);
   }
 
   Color _getThemeAwareColor(Color color) {
     final isDark = themeMode == ThemeMode.dark;
 
-    // If we're in Light Mode and the color is white/near-white, flip to black
     if (!isDark && (color == Colors.white || color.computeLuminance() > 0.9)) {
       return Colors.black;
-    }
-
-    // If we're in Dark Mode and the color is black/near-black, flip to white
-    if (isDark && (color == Colors.black || color.computeLuminance() < 0.1)) {
+    } else if (isDark &&
+        (color == Colors.black || color.computeLuminance() < 0.1)) {
       return Colors.white;
+    } else {
+      return color;
     }
-
-    return color;
   }
 
-  void _drawStrokes(Canvas canvas, Size size, List<Stroke> strokesToDraw) {
+  void _drawStrokes(
+    Canvas canvas,
+    Size size,
+    List<Stroke> strokesToDraw, {
+    bool isActive = false,
+  }) {
     if (strokesToDraw.isEmpty) return;
 
     for (int i = 0; i < strokesToDraw.length; i++) {
       final stroke = strokesToDraw[i];
-      final isSelected = strokesToDraw == strokes && i == selectedStrokeIndex;
-      if (stroke.points.isEmpty) continue;
+      final points = stroke.points;
+      if (points.isEmpty) continue;
 
-      final strokeColor = _getThemeAwareColor(stroke.color);
-
-      final paint = Paint()
-        ..color = stroke.isEraser ? Colors.transparent : strokeColor
-        ..strokeWidth = stroke.strokeWidth
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-
-      if (stroke.isEraser) {
-        paint.blendMode = BlendMode.clear;
+      bool isSelected = false;
+      if (selectedStrokeIndex != null) {
+        if (identical(strokesToDraw, strokes)) {
+          isSelected = i == selectedStrokeIndex;
+        } else {
+          isSelected = strokes.indexOf(stroke) == selectedStrokeIndex;
+        }
       }
+
+      final strokeColor = _getThemeAwareColor(
+        isSelected ? Colors.blue : stroke.color,
+      );
+      final strokePaint = _getStrokePaint(
+        strokeColor,
+        stroke.strokeWidth,
+        stroke.isEraser,
+      );
 
       if (stroke.type == StrokeType.text && stroke.text != null) {
         _drawTextStroke(canvas, stroke, strokeColor);
       } else if (stroke.type == StrokeType.icon && stroke.iconPath != null) {
         _drawIconStroke(canvas, stroke, isSelected, strokeColor);
-      } else if (stroke.points.length == 1) {
-        final dotPaint = Paint()
-          ..color = stroke.isEraser ? Colors.transparent : strokeColor
-          ..style = PaintingStyle.fill;
-        if (stroke.isEraser) dotPaint.blendMode = BlendMode.clear;
-        canvas.drawCircle(
-          stroke.points.first,
-          stroke.strokeWidth / 2,
-          dotPaint,
-        );
+      } else if (points.length == 1) {
+        final dotPaint = _getDotPaint(strokeColor, stroke.isEraser);
+        canvas.drawCircle(points.first, stroke.strokeWidth / 2, dotPaint);
       } else if (stroke.type == StrokeType.connector) {
         _drawConnectorStroke(canvas, stroke, strokeColor);
       } else if (stroke.type != StrokeType.pen) {
         _drawShapeStroke(canvas, stroke, strokeColor);
       } else {
-        final path = Path();
-        path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
-        for (int i = 1; i < stroke.points.length; i++) {
-          path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+        if (isActive) {
+          for (int j = 0; j < points.length - 1; j++) {
+            canvas.drawLine(points[j], points[j + 1], strokePaint);
+          }
+        } else {
+          final path = Path();
+          if (points.isNotEmpty) {
+            path.moveTo(points.first.dx, points.first.dy);
+            for (int j = 1; j < points.length; j++) {
+              path.lineTo(points[j].dx, points[j].dy);
+            }
+          }
+          canvas.drawPath(path, strokePaint);
         }
-        canvas.drawPath(path, paint);
       }
     }
   }
@@ -134,8 +212,15 @@ class WhiteboardPainter extends CustomPainter {
     if (stroke.iconPath == null || stroke.points.isEmpty) return;
 
     final center = stroke.points.first;
+    if (!center.dx.isFinite ||
+        !center.dy.isFinite ||
+        !stroke.scale.isFinite ||
+        !stroke.rotation.isFinite) {
+      return;
+    }
+
     const baseSize = 48.0;
-    final size = baseSize * stroke.scale;
+    final size = (baseSize * stroke.scale.abs()).clamp(4.0, 4096.0);
     final rect = Rect.fromCenter(center: center, width: size, height: size);
 
     canvas.save();
@@ -168,19 +253,13 @@ class WhiteboardPainter extends CustomPainter {
       final paint = Paint()
         ..color = color.withValues(alpha: 0.5)
         ..style = PaintingStyle.fill;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(8)),
-        paint,
-      );
+      canvas.drawRect(rect, paint);
 
       final borderPaint = Paint()
         ..color = color
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(8)),
-        borderPaint,
-      );
+      canvas.drawRect(rect, borderPaint);
     }
 
     if (isSelected) {
@@ -477,5 +556,19 @@ class WhiteboardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant WhiteboardPainter oldDelegate) => true;
+  bool shouldRepaint(covariant WhiteboardPainter oldDelegate) {
+    return strokes != oldDelegate.strokes ||
+        activeStroke != oldDelegate.activeStroke ||
+        activeStrokeRevision != oldDelegate.activeStrokeRevision ||
+        panOffset != oldDelegate.panOffset ||
+        zoomLevel != oldDelegate.zoomLevel ||
+        hoverPosition != oldDelegate.hoverPosition ||
+        brushSize != oldDelegate.brushSize ||
+        brushColor != oldDelegate.brushColor ||
+        isEraser != oldDelegate.isEraser ||
+        themeMode != oldDelegate.themeMode ||
+        selectedStrokeIndex != oldDelegate.selectedStrokeIndex ||
+        selectionRect != oldDelegate.selectionRect ||
+        selectedGroupBounds != oldDelegate.selectedGroupBounds;
+  }
 }

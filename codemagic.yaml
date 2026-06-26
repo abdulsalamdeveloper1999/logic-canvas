@@ -1,0 +1,76 @@
+workflows:
+  ios-release:
+    name: Logic Canvas iOS App Store Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: develop
+          include: true
+
+    integrations:
+      app_store_connect: Asdevify Ltd
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.asdevify.logiccanvas
+      flutter: 3.38.9
+      xcode: 26.6
+      cocoapods: default
+
+    scripts:
+      - name: Record App Store toolchain
+        script: |
+          xcodebuild -version
+          sw_vers
+          flutter --version
+
+      - name: Initialize Keychain
+        script: |
+          keychain initialize
+
+      - name: Fetch iOS signing files
+        script: |
+          app-store-connect fetch-signing-files "com.asdevify.logiccanvas" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Run Build Runner code generation
+        script: |
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Build App Store IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist="$HOME/export_options.plist"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      email:
+        recipients:
+          - abdulsalamdev1999@gmail.com
+        notify:
+          success: true
+          failure: true
