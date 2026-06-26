@@ -17,6 +17,9 @@ workflows:
       app_store_connect: Asdevify Ltd
 
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.asdevify.logiccanvas
       flutter: 3.38.9
       xcode: 26.6
       cocoapods: default
@@ -27,28 +30,6 @@ workflows:
           xcodebuild -version
           sw_vers
           flutter --version
-
-      - name: Initialize Keychain
-        script: |
-          keychain initialize
-
-      - name: Debug signing environment
-        script: |
-          app-store-connect apps list
-          echo "---"
-          app-store-connect certificates list --type IOS_DISTRIBUTION
-          echo "---"
-          app-store-connect profiles list --type IOS_APP_STORE
-
-      - name: Fetch iOS signing files
-        script: |
-          app-store-connect fetch-signing-files "com.asdevify.logiccanvas" \
-            --type IOS_APP_STORE \
-            --create
-
-      - name: Add certificates to keychain
-        script: |
-          keychain add-certificates
 
       - name: Set up code signing settings on Xcode project
         script: |
@@ -82,3 +63,4 @@ workflows:
         notify:
           success: true
           failure: true
+#code magic password :0ImV1sDd
