@@ -35,6 +35,14 @@ workflows:
         script: |
           keychain initialize
 
+      - name: Debug signing environment
+        script: |
+          app-store-connect apps list
+          echo "---"
+          app-store-connect certificates list --type IOS_DISTRIBUTION
+          echo "---"
+          app-store-connect profiles list --type IOS_APP_STORE
+
       - name: Fetch iOS signing files
         script: |
           app-store-connect fetch-signing-files "com.asdevify.logiccanvas" \
