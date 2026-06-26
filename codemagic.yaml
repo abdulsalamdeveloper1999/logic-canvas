@@ -46,6 +46,7 @@ workflows:
       - name: Build App Store IPA
         script: |
           flutter build ipa --release \
+            --build-number=$(($BUILD_NUMBER + 10)) \
             --export-options-plist="$HOME/export_options.plist"
 
     artifacts:
