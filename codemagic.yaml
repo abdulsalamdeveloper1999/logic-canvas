@@ -17,9 +17,6 @@ workflows:
       app_store_connect: Asdevify Ltd
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.asdevify.logiccanvas
       flutter: 3.38.9
       xcode: 26.6
       cocoapods: default
