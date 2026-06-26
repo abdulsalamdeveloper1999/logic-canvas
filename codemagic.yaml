@@ -45,8 +45,11 @@ workflows:
 
       - name: Build App Store IPA
         script: |
+          # Codemagic $BUILD_NUMBER starts at 1, we add 15 to ensure it's higher than 9
+          BUILD_NUM=$(($BUILD_NUMBER + 15))
           flutter build ipa --release \
-            --build-number=$(($BUILD_NUMBER + 10)) \
+            --build-name=1.0.2 \
+            --build-number=$BUILD_NUM \
             --export-options-plist="$HOME/export_options.plist"
 
     artifacts:
