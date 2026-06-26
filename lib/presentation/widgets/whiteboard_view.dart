@@ -254,8 +254,9 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                   event.localPosition,
                 );
 
+                _liveDrawingCubit.updateHover(canvasPoint);
+
                 if (settings.toolMode == ToolMode.select) {
-                  _liveDrawingCubit.updateHover(canvasPoint);
                   _handleSelectionPointerMove(
                     canvasPoint: canvasPoint,
                     drawingCubit: drawingCubit,
