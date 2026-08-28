@@ -3,7 +3,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:logic_canvas/core/injection.dart';
+import 'package:logic_canvas/data/services/snapshot_service.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
@@ -17,6 +19,46 @@ import 'package:logic_canvas/presentation/pages/subscription/paywall_page.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'presentation/cubits/drawing/drawing_state.dart';
+
+/// App-wide glass tuning.
+///
+/// The library's defaults render a soft blur, which reads as flat frosted
+/// plastic. What makes Liquid Glass feel like glass is the light behaving
+/// physically: the surface has to have *thickness* so it bends what is behind
+/// it (refractiveIndex), split the colours very slightly at the edges
+/// (chromaticAberration), and catch a specular highlight along the rim.
+const _glassTheme = GlassThemeData(
+  light: GlassThemeVariant(
+    settings: GlassThemeSettings(
+      // A thicker pane bends more of the board behind it.
+      thickness: 28,
+      refractiveIndex: 1.45,
+      // Just enough colour split to read as glass rather than as a filter.
+      chromaticAberration: 0.035,
+      // Light from the top-left, matching where iPadOS puts its own highlights.
+      lightIntensity: 0.85,
+      ambientStrength: 0.12,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      // Light mode needs less blur, or the bars turn into milk.
+      blur: 6,
+      saturation: 1.35,
+    ),
+  ),
+  dark: GlassThemeVariant(
+    settings: GlassThemeSettings(
+      thickness: 32,
+      refractiveIndex: 1.5,
+      chromaticAberration: 0.045,
+      // Dark backgrounds give the rim highlight less to work with, so it is
+      // pushed harder here.
+      lightIntensity: 1.0,
+      ambientStrength: 0.18,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      blur: 8,
+      saturation: 1.5,
+    ),
+  ),
+);
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +87,9 @@ void main() async {
     debugPrint('📦 Hive: Opening entitlements box...');
     await Hive.openBox('entitlements');
 
+    debugPrint('📦 Hive: Opening snapshots box...');
+    await Hive.openBox(SnapshotService.boxName);
+
     debugPrint('📦 Hive: Boxes opened successfully');
 
     debugPrint('💉 DI: Configuring dependencies...');
@@ -55,8 +100,30 @@ void main() async {
     FlutterGemma.initialize();
     debugPrint('🤖 Gemma: Initialized');
 
+    // Pre-warms the glass shaders so the first frame of the top bar and
+    // toolbar does not flash white. A failure here must not block launch —
+    // the glass widgets fall back to a plain blur on their own.
+    debugPrint('🫧 LiquidGlass: Initializing...');
+    try {
+      await LiquidGlassWidgets.initialize();
+      debugPrint('🫧 LiquidGlass: Initialized');
+    } catch (e) {
+      debugPrint(
+        '🫧 LiquidGlass: init failed, continuing without pre-warm ($e)',
+      );
+    }
+
     debugPrint('🚀 App: Running LogicCanvasApp...');
-    runApp(const LogicCanvasApp());
+    runApp(
+      LiquidGlassWidgets.wrap(
+        theme: _glassTheme,
+        // Benchmarks the device at launch and picks the rendering tier. On an
+        // iPad Pro this lands on `premium`, which is the tier that actually
+        // does the refraction pass rather than a cheap blur.
+        adaptiveQuality: true,
+        child: const LogicCanvasApp(),
+      ),
+    );
   } catch (e) {
     debugPrint('❌ CRITICAL_INIT_ERROR: $e');
     runApp(

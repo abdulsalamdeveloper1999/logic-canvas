@@ -14,6 +14,10 @@ class DrawingState with _$DrawingState {
     @Default({}) Map<String, String?> boardProblems,
     @Default(false) bool isDrawing,
     @Default(false) bool isLoaded,
+
+    /// Boards whose stored data could not be read at launch. Surfaced to the
+    /// user rather than letting a board silently come back empty.
+    @Default(<String>[]) List<String> damagedBoardIds,
     int? selectedStrokeIndex,
   }) = _DrawingState;
 
@@ -51,24 +55,24 @@ class DrawingState with _$DrawingState {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is DrawingState &&
-        identical(boards, other.boards) &&
         activeBoardId == other.activeBoardId &&
-        identical(boardIds, other.boardIds) &&
-        identical(redoStack, other.redoStack) &&
-        identical(boardProblems, other.boardProblems) &&
         isDrawing == other.isDrawing &&
         isLoaded == other.isLoaded &&
-        selectedStrokeIndex == other.selectedStrokeIndex;
+        selectedStrokeIndex == other.selectedStrokeIndex &&
+        boardIds.length == other.boardIds.length &&
+        redoStack.length == other.redoStack.length &&
+        damagedBoardIds.length == other.damagedBoardIds.length &&
+        boards.length == other.boards.length &&
+        (boards[activeBoardId]?.length ==
+            other.boards[other.activeBoardId]?.length);
   }
 
   @override
   int get hashCode =>
-      identityHashCode(boards) ^
       activeBoardId.hashCode ^
-      identityHashCode(boardIds) ^
-      identityHashCode(redoStack) ^
-      identityHashCode(boardProblems) ^
       isDrawing.hashCode ^
       isLoaded.hashCode ^
-      selectedStrokeIndex.hashCode;
+      selectedStrokeIndex.hashCode ^
+      boards.length.hashCode ^
+      redoStack.length.hashCode;
 }

@@ -9,8 +9,22 @@ import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_state.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_state.dart';
-import 'package:logic_canvas/presentation/widgets/app_toast.dart';
+import 'package:logic_canvas/domain/entities/stroke.dart';
+import 'package:logic_canvas/domain/entities/viz_scene.dart';
+import 'package:logic_canvas/presentation/widgets/backup_panel.dart';
+import 'package:logic_canvas/presentation/widgets/viz/pattern_library_view.dart';
 
+enum _LibraryLens { patterns, problems }
+
+/// The drawer's home: switch boards, browse what to start a board from, and
+/// reach settings.
+///
+/// Two tabs, not four. Boards and Library are things a person browses while
+/// working; Settings is visited once and forgotten, so it lives behind the
+/// gear icon in a sheet instead of permanently occupying a quarter of the tab
+/// bar. Learn and Templates used to be separate tabs for the same underlying
+/// idea — something to start a board from — so they are now one tab with a
+/// single search across both.
 class BoardPanel extends StatefulWidget {
   const BoardPanel({super.key});
 
@@ -18,682 +32,491 @@ class BoardPanel extends StatefulWidget {
   State<BoardPanel> createState() => _BoardPanelState();
 }
 
-class _BoardPanelState extends State<BoardPanel> {
+class _BoardPanelState extends State<BoardPanel>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  final Set<String> _expandedCategories = {};
-  bool _isDownloadingFromCloud = false;
+  _LibraryLens _libraryLens = _LibraryLens.patterns;
+  final Set<String> _expandedPacks = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _downloadFromICloud() async {
-    if (_isDownloadingFromCloud) return;
-
-    setState(() => _isDownloadingFromCloud = true);
-    AppToast.show(
-      context,
-      message: 'Downloading from iCloud. You will be notified when it is done.',
-      duration: const Duration(seconds: 3),
-    );
-
-    try {
-      final downloaded = await context.read<DrawingCubit>().syncFromCloud();
-      if (!mounted) return;
-
-      AppToast.show(
-        context,
-        message: downloaded
-            ? 'iCloud download complete. Your boards are up to date.'
-            : 'No iCloud backup was found, or the download failed.',
-        duration: const Duration(seconds: 4),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      AppToast.show(
-        context,
-        message: 'iCloud download failed. Please try again.',
-        duration: const Duration(seconds: 4),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isDownloadingFromCloud = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: BlocBuilder<DrawingCubit, DrawingState>(
-        builder: (context, state) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: 0.3),
-              border: Border(
-                right: BorderSide(
-                  color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-                ),
+    return BlocBuilder<DrawingCubit, DrawingState>(
+      builder: (context, state) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
+            border: Border(
+              right: BorderSide(
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
               ),
             ),
-            child: Column(
-              children: [
-                _buildHeader(context),
-                TabBar(
-                  tabs: const [
-                    Tab(text: 'MY BOARDS'),
-                    Tab(text: 'TEMPLATES'),
-                    Tab(text: 'SETTINGS'),
+          ),
+          child: Column(
+            children: [
+              _buildHeader(context),
+              TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Boards'),
+                  Tab(text: 'Library'),
+                ],
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                labelColor: Theme.of(context).colorScheme.onSurface,
+                unselectedLabelColor: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant,
+                indicatorColor: Theme.of(context).colorScheme.primary,
+                indicatorWeight: 2,
+                indicatorSize: TabBarIndicatorSize.label,
+                dividerColor: Colors.transparent,
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildBoardsTab(context, state),
+                    _buildLibraryTab(context),
                   ],
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                    fontSize: 10,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    fontSize: 10,
-                  ),
-                  indicatorColor: Theme.of(context).colorScheme.primary,
-                  indicatorWeight: 3,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  dividerColor: Colors.transparent,
                 ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      // Tab 1: My Boards
-                      _buildMyBoardsTab(context, state),
-                      // Tab 2: Templates
-                      _buildTemplatesTab(context),
-                      // Tab 3: Settings
-                      _buildSettingsTab(context),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ------------------------------------------------------------- typography
+  //
+  // Three styles, not eight. The previous panel emphasised nearly everything
+  // — w900 letterspaced caps for section labels, tab labels, and category
+  // headers alike — which reads as nothing being more important than
+  // anything else. Primary color is reserved for the active board, the tab
+  // indicator, and real actions; everywhere else stays neutral.
+
+  TextStyle _rowTitleStyle(BuildContext context) => TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: Theme.of(context).colorScheme.onSurface,
+  );
+
+  TextStyle _metaStyle(BuildContext context) => TextStyle(
+    fontSize: 12,
+    color: Theme.of(context).colorScheme.onSurfaceVariant,
+  );
+
+  // ------------------------------------------------------------------ header
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 20, 8, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, size: 20),
+            tooltip: 'Settings',
+            onPressed: () => _openSettings(context),
+            visualDensity: VisualDensity.compact,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSettingsTab(BuildContext context) {
-    return BlocBuilder<SettingsCubit, SettingsState>(
-      builder: (context, state) {
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          children: [
-            _buildSettingsSection(context, 'SYNCHRONIZATION', [
-              SwitchListTile(
-                title: Text(
-                  'iCloud Sync',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontSize: 14,
-                  ),
+  // ------------------------------------------------------------- boards tab
+
+  Widget _buildBoardsTab(BuildContext context, DrawingState state) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+      itemCount: state.boardIds.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            children: [
+              _buildNewBoardRow(context),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Divider(
+                  height: 17,
+                  thickness: 1,
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
                 ),
-                subtitle: Text(
-                  'Backup & sync boards across devices',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 11,
-                  ),
-                ),
-                value: state.isICloudSyncEnabled,
-                onChanged: (val) {
-                  context.read<SettingsCubit>().toggleICloudSync();
-                  context.read<DrawingCubit>().setSyncEnabled(val);
-                },
-                secondary: Icon(
-                  Icons.cloud_sync_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                activeThumbColor: Theme.of(context).colorScheme.primary,
-                contentPadding: EdgeInsets.zero,
               ),
-              const SizedBox(height: 8),
-              Row(
+            ],
+          );
+        }
+        final boardId = state.boardIds[index - 1];
+        return _buildBoardTile(
+          context,
+          boardId,
+          boardId == state.activeBoardId,
+        );
+      },
+    );
+  }
+
+  Widget _buildNewBoardRow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCreateBoardDialog(context),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              Icon(Icons.add_rounded, size: 20, color: scheme.primary),
+              const SizedBox(width: 12),
+              Text(
+                'New board',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardTile(BuildContext context, String boardId, bool isActive) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Dismissible(
+        key: Key('board_$boardId'),
+        direction: DismissDirection.endToStart,
+        confirmDismiss: (direction) => _confirmDeleteBoard(context, boardId),
+        onDismissed: (direction) {
+          context.read<DrawingCubit>().deleteBoard(boardId);
+        },
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 18),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.delete_outline_rounded,
+            color: Colors.redAccent,
+            size: 20,
+          ),
+        ),
+        child: Material(
+          color: isActive
+              ? scheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.read<DrawingCubit>().switchToBoard(boardId);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
                 children: [
+                  Icon(
+                    isActive
+                        ? Icons.description_rounded
+                        : Icons.description_outlined,
+                    size: 18,
+                    color: isActive
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant.withValues(alpha: 0.55),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: state.isICloudQuotaExceeded
-                          ? null
-                          : () => context.read<DrawingCubit>().syncToCloud(),
-                      icon: const Icon(Icons.upload_rounded, size: 16),
-                      label: const Text(
-                        'UPLOAD',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    child: Text(
+                      boardId,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: isActive
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isActive
+                            ? scheme.onSurface
+                            : scheme.onSurface.withValues(alpha: 0.75),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.primary,
-                        side: BorderSide(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.3),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isDownloadingFromCloud
-                          ? null
-                          : _downloadFromICloud,
-                      icon: _isDownloadingFromCloud
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_rounded, size: 16),
-                      label: const Text(
-                        'DOWNLOAD',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.primary,
-                        side: BorderSide(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.3),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      size: 18,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
                     ),
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Board options',
+                    onSelected: (value) {
+                      if (value == 'rename') {
+                        _showRenameBoardDialog(context, boardId);
+                      } else if (value == 'delete') {
+                        _deleteBoardWithConfirm(context, boardId);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'rename', child: Text('Rename')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
                   ),
                 ],
               ),
-              if (state.isICloudQuotaExceeded) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: Colors.orangeAccent.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orangeAccent,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'iCloud Storage Full',
-                              style: TextStyle(
-                                color: Colors.orangeAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              'Sync is paused until you have free space.',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ]),
-            const SizedBox(height: 16),
-            _buildAiModelSection(context),
-            const SizedBox(height: 16),
-            _buildSettingsSection(context, 'WORKBENCH', [
-              ListTile(
-                title: Text(
-                  'Theme Mode',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontSize: 14,
-                  ),
-                ),
-                trailing: Text(
-                  state.themeMode.name.toUpperCase(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontSize: 12,
-                  ),
-                ),
-                onTap: () => context.read<SettingsCubit>().toggleTheme(),
-                contentPadding: EdgeInsets.zero,
-              ),
-              ListTile(
-                title: Text(
-                  'Grid Pattern',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontSize: 14,
-                  ),
-                ),
-                trailing: Text(
-                  state.pattern.name.toUpperCase(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontSize: 12,
-                  ),
-                ),
-                onTap: () {
-                  final patterns = BackgroundPattern.values;
-                  final nextIndex =
-                      (patterns.indexOf(state.pattern) + 1) % patterns.length;
-                  context.read<SettingsCubit>().setPattern(patterns[nextIndex]);
-                },
-                contentPadding: EdgeInsets.zero,
-              ),
-            ]),
-            const SizedBox(height: 24),
-            Text(
-              'PRO TIP: Long-press icons to delete from board.',
-              style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                fontSize: 10,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildAiModelSection(BuildContext context) {
-    return BlocBuilder<GemmaCubit, GemmaState>(
-      builder: (context, state) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'AI MODEL',
-              style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w900,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            switch (state.status) {
-              GemmaStatus.idle => _buildIdleState(context),
-              GemmaStatus.downloading => _buildDownloadingState(context, state),
-              GemmaStatus.ready => _buildReadyState(context),
-              GemmaStatus.error => _buildErrorState(context, state),
-            },
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildIdleState(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          title: Text(
-            'On-Device AI Model',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 14,
             ),
           ),
-          subtitle: Text(
-            'Enhance your whiteboard with AI-powered code explanations & diagram insights (1.7 GB)',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 11,
-            ),
-          ),
-          contentPadding: EdgeInsets.zero,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
-                icon: const Icon(Icons.download_rounded, size: 16),
-                label: const Text(
-                  'DOWNLOAD MODEL',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                  side: BorderSide(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDownloadingState(BuildContext context, GemmaState state) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Downloading AI Model...',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 14,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${(state.downloadProgress * 100).toInt()}%',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: state.downloadProgress,
-              minHeight: 6,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.1),
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReadyState(BuildContext context) {
-    return ListTile(
-      title: Row(
-        children: [
-          Text(
-            'AI Model Ready',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(Icons.check_circle_rounded, size: 18, color: Colors.greenAccent),
-        ],
-      ),
-      subtitle: Text(
-        'Model is installed and ready for offline use',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          fontSize: 11,
         ),
       ),
-      trailing: TextButton(
-        onPressed: () => context.read<GemmaCubit>().deleteModel(),
-        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-        child: const Text('Delete', style: TextStyle(fontSize: 11)),
-      ),
-      contentPadding: EdgeInsets.zero,
     );
   }
 
-  Widget _buildErrorState(BuildContext context, GemmaState state) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.redAccent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.error_outline_rounded,
-                color: Colors.redAccent,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Download Failed',
-                style: TextStyle(
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          if (state.errorMessage != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              state.errorMessage!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 10,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
-            icon: const Icon(Icons.refresh_rounded, size: 14),
-            label: const Text('Retry', style: TextStyle(fontSize: 10)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.redAccent,
-              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsSection(
+  Future<void> _deleteBoardWithConfirm(
     BuildContext context,
-    String title,
-    List<Widget> children,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-            fontWeight: FontWeight.w900,
-            fontSize: 10,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...children,
-      ],
-    );
+    String boardId,
+  ) async {
+    final confirmed = await _confirmDeleteBoard(context, boardId);
+    if (confirmed == true && context.mounted) {
+      context.read<DrawingCubit>().deleteBoard(boardId);
+    }
   }
 
-  Widget _buildMyBoardsTab(BuildContext context, DrawingState state) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
-            itemCount: state.boardIds.length,
-            itemBuilder: (context, index) {
-              final boardId = state.boardIds[index];
-              final isActive = boardId == state.activeBoardId;
-              return _buildBoardTile(context, boardId, isActive);
-            },
-          ),
-        ),
-        _buildAddBoardButton(context),
-        const SizedBox(
-          height: 16,
-        ), // A little padding so it doesn't touch the absolute edge
-      ],
-    );
-  }
+  // ------------------------------------------------------------ library tab
 
-  Widget _buildTemplatesTab(BuildContext context) {
+  Widget _buildLibraryTab(BuildContext context) {
+    final query = _searchQuery;
+
     final starterPack = _filterProblems(ProblemData.starterPack);
     final blind75 = _filterProblems(ProblemData.blind75);
     final pareto = _filterProblems(ProblemData.paretoProblems);
+    final problemMatchCount =
+        starterPack.length + blind75.length + pareto.length;
 
-    final bool isSearching = _searchQuery.isNotEmpty;
-    final bool hasAnyResults =
-        starterPack.isNotEmpty || blind75.isNotEmpty || pareto.isNotEmpty;
+    final patternMatchCount = query.isEmpty
+        ? null
+        : PatternLibraryView.grouped()
+              .expand((g) => g.traces)
+              .where((t) => PatternLibraryView.matches(t, query))
+              .length;
+
+    final showPatternsHint =
+        query.isNotEmpty &&
+        _libraryLens == _LibraryLens.patterns &&
+        (patternMatchCount ?? 0) == 0 &&
+        problemMatchCount > 0;
+    final showProblemsHint =
+        query.isNotEmpty &&
+        _libraryLens == _LibraryLens.problems &&
+        problemMatchCount == 0 &&
+        (patternMatchCount ?? 0) > 0;
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.1),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: _buildSearchField(context),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: SegmentedButton<_LibraryLens>(
+            segments: const [
+              ButtonSegment(
+                value: _LibraryLens.patterns,
+                label: Text('Patterns'),
+                icon: Icon(Icons.play_circle_outline_rounded, size: 16),
               ),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) =>
-                  setState(() => _searchQuery = val.trim().toLowerCase()),
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search problems...',
-                hintStyle: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                  fontSize: 13,
-                ),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.5),
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ButtonSegment(
+                value: _LibraryLens.problems,
+                label: Text('Problems'),
+                icon: Icon(Icons.extension_outlined, size: 16),
               ),
-            ),
+            ],
+            selected: {_libraryLens},
+            onSelectionChanged: (selection) {
+              setState(() => _libraryLens = selection.first);
+            },
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
           ),
         ),
+        if (showProblemsHint)
+          _buildCrossLensHint(
+            context,
+            problemMatchCount,
+            _LibraryLens.problems,
+            'Problems',
+          ),
+        if (showPatternsHint)
+          _buildCrossLensHint(
+            context,
+            patternMatchCount!,
+            _LibraryLens.patterns,
+            'Patterns',
+          ),
         Expanded(
-          child: !hasAnyResults && isSearching
-              ? _buildNoResultsState(context)
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
-                  children: [
-                    if (starterPack.isNotEmpty)
-                      _buildCategorySection(
-                        context,
-                        'STARTER PACK',
-                        starterPack,
-                        isSearching ||
-                            _expandedCategories.contains('STARTER PACK'),
-                      ),
-                    if (blind75.isNotEmpty)
-                      _buildCategorySection(
-                        context,
-                        'BLIND 75',
-                        blind75,
-                        isSearching || _expandedCategories.contains('BLIND 75'),
-                        useSubcategories: false, // Flat list as requested
-                      ),
-                    if (pareto.isNotEmpty)
-                      _buildCategorySection(
-                        context,
-                        'PARETO LEETCODE (49)',
-                        pareto,
-                        isSearching ||
-                            _expandedCategories.contains(
-                              'PARETO LEETCODE (49)',
-                            ),
-                        useSubcategories: !isSearching,
-                      ),
-                  ],
+          child: _libraryLens == _LibraryLens.patterns
+              ? PatternLibraryView(
+                  onCopyToBoard: _writeTraceToBoard,
+                  searchQuery: query,
+                )
+              : _buildProblemsBrowser(
+                  context,
+                  starterPack,
+                  blind75,
+                  pareto,
+                  isSearching: query.isNotEmpty,
                 ),
         ),
       ],
     );
+  }
+
+  Widget _buildSearchField(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 38,
+      child: TextField(
+        controller: _searchController,
+        onChanged: (val) =>
+            setState(() => _searchQuery = val.trim().toLowerCase()),
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Search patterns and problems',
+          hintStyle: TextStyle(
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+            fontSize: 13,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 16),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  visualDensity: VisualDensity.compact,
+                )
+              : null,
+          filled: true,
+          fillColor: scheme.onSurface.withValues(alpha: 0.05),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+      ),
+    );
+  }
+
+  /// Shown when the active lens has nothing for the query but the other one
+  /// does — a tappable way out instead of a dead end that looks like "no
+  /// results" when the answer was simply in the other lens.
+  Widget _buildCrossLensHint(
+    BuildContext context,
+    int otherCount,
+    _LibraryLens switchTo,
+    String label,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Material(
+        color: scheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => setState(() => _libraryLens = switchTo),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.swap_horiz_rounded, size: 16, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$otherCount ${otherCount == 1 ? "match" : "matches"} in $label',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Puts a pattern's summary on a fresh board, so the learner leaves the
+  /// animation with something to build on rather than a blank canvas.
+  void _writeTraceToBoard(AlgorithmTrace trace) {
+    final cubit = context.read<DrawingCubit>();
+    final textColor = context.read<SettingsCubit>().state.strokeColor;
+
+    cubit.createNewBoard(_uniqueBoardName(cubit, trace.pattern));
+    cubit.addStroke(
+      Stroke(
+        points: const [Offset(100, 100)],
+        color: textColor,
+        strokeWidth: 2.0,
+        type: StrokeType.text,
+        text:
+            '${trace.title} — ${trace.pattern}\n\n'
+            '${trace.patternIdea}\n\n'
+            '${trace.pseudocode.join('\n')}\n\n'
+            'Time: ${trace.timeComplexity}\n'
+            'Space: ${trace.spaceComplexity}\n\n'
+            'Remember: ${trace.takeaway}',
+      ),
+    );
+  }
+
+  String _uniqueBoardName(DrawingCubit cubit, String base) {
+    var name = base;
+    var counter = 1;
+    while (cubit.state.boardIds.contains(name)) {
+      name = '$base ($counter)';
+      counter++;
+    }
+    return name;
   }
 
   List<Problem> _filterProblems(List<Problem> problems) {
@@ -738,122 +561,140 @@ class _BoardPanelState extends State<BoardPanel> {
     );
   }
 
-  Widget _buildCategorySection(
+  Widget _buildProblemsBrowser(
+    BuildContext context,
+    List<Problem> starterPack,
+    List<Problem> blind75,
+    List<Problem> pareto, {
+    required bool isSearching,
+  }) {
+    if (isSearching &&
+        starterPack.isEmpty &&
+        blind75.isEmpty &&
+        pareto.isEmpty) {
+      return _buildNoResultsState(context);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+      children: [
+        if (starterPack.isNotEmpty)
+          _buildPackSection(
+            context,
+            'Starter pack',
+            starterPack,
+            isSearching || _expandedPacks.contains('Starter pack'),
+          ),
+        if (blind75.isNotEmpty)
+          _buildPackSection(
+            context,
+            'Blind 75',
+            blind75,
+            isSearching || _expandedPacks.contains('Blind 75'),
+          ),
+        if (pareto.isNotEmpty)
+          _buildPackSection(
+            context,
+            'Pareto LeetCode',
+            pareto,
+            isSearching || _expandedPacks.contains('Pareto LeetCode'),
+            groupByCategory: true,
+          ),
+      ],
+    );
+  }
+
+  /// One expandable pack of problems. A single level of disclosure — the
+  /// previous panel nested a second `ExpansionTile` per category inside this
+  /// one, which meant two chevrons and two indents to reach a problem.
+  /// [groupByCategory] draws the same grouping as a plain, non-collapsible
+  /// label instead.
+  Widget _buildPackSection(
     BuildContext context,
     String title,
     List<Problem> problems,
     bool initiallyExpanded, {
-    bool useSubcategories = false,
+    bool groupByCategory = false,
   }) {
-    if (useSubcategories) {
-      // Group problems by category
-      final Map<String, List<Problem>> grouped = {};
+    final scheme = Theme.of(context).colorScheme;
+
+    final children = <Widget>[];
+    if (groupByCategory) {
+      final grouped = <String, List<Problem>>{};
       for (final p in problems) {
         grouped.update(p.category, (list) => list..add(p), ifAbsent: () => [p]);
       }
-
-      return Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          key: PageStorageKey('category_$title'),
-          initiallyExpanded: initiallyExpanded,
-          onExpansionChanged: (expanded) {
-            setState(() {
-              if (expanded) {
-                _expandedCategories.add(title);
-              } else {
-                _expandedCategories.remove(title);
-              }
-            });
-          },
-          title: Text(
-            title,
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.7),
-              fontWeight: FontWeight.w900,
-              fontSize: 10,
-              letterSpacing: 1.5,
-            ),
-          ),
-          iconColor: Theme.of(context).colorScheme.primary,
-          collapsedIconColor: Theme.of(
-            context,
-          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-          children: grouped.entries.map((entry) {
-            final subKey = 'sub_${title}_${entry.key}';
-            return ExpansionTile(
-              key: PageStorageKey(subKey),
-              initiallyExpanded: _expandedCategories.contains(subKey),
-              onExpansionChanged: (expanded) {
-                setState(() {
-                  if (expanded) {
-                    _expandedCategories.add(subKey);
-                  } else {
-                    _expandedCategories.remove(subKey);
-                  }
-                });
-              },
-              title: Text(
-                entry.key.toUpperCase(),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              iconColor: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.5),
-              collapsedIconColor: Theme.of(
-                context,
-              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
-              children: entry.value
-                  .map((problem) => _buildTemplateTile(context, problem))
-                  .toList(),
-            );
-          }).toList(),
-        ),
-      );
+      for (final entry in grouped.entries) {
+        children.add(_buildCategoryLabel(context, entry.key));
+        children.addAll(entry.value.map((p) => _buildProblemTile(context, p)));
+      }
+    } else {
+      children.addAll(problems.map((p) => _buildProblemTile(context, p)));
     }
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        key: PageStorageKey('category_$title'),
+        key: PageStorageKey('pack_$title'),
         initiallyExpanded: initiallyExpanded,
         onExpansionChanged: (expanded) {
-          if (expanded) {
-            _expandedCategories.add(title);
-          } else {
-            _expandedCategories.remove(title);
-          }
+          setState(() {
+            if (expanded) {
+              _expandedPacks.add(title);
+            } else {
+              _expandedPacks.remove(title);
+            }
+          });
         },
-        title: Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-            fontWeight: FontWeight.w900,
-            fontSize: 10,
-            letterSpacing: 1.5,
-          ),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+        childrenPadding: EdgeInsets.zero,
+        title: Row(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${problems.length}',
+              style: TextStyle(
+                fontSize: 12,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
         ),
-        iconColor: Theme.of(context).colorScheme.primary,
-        collapsedIconColor: Theme.of(
-          context,
-        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-        children: problems
-            .map((problem) => _buildTemplateTile(context, problem))
-            .toList(),
+        iconColor: scheme.onSurfaceVariant,
+        collapsedIconColor: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+        children: children,
       ),
     );
   }
 
-  Widget _buildTemplateTile(BuildContext context, Problem problem) {
+  Widget _buildCategoryLabel(BuildContext context, String category) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Text(
+        category,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProblemTile(BuildContext context, Problem problem) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: () {
           HapticFeedback.lightImpact();
@@ -863,51 +704,36 @@ class _BoardPanelState extends State<BoardPanel> {
             color,
           );
         },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              Icon(
-                Icons.extension_rounded,
-                size: 20,
-                color: Theme.of(context).colorScheme.primary,
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: _difficultyColor(problem.difficulty),
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      problem.title,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      '${problem.difficulty.name.toUpperCase()} • ${problem.category}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  problem.title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Icon(
-                Icons.add_circle_outline_rounded,
-                size: 18,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                Icons.add_rounded,
+                size: 16,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
               ),
             ],
           ),
@@ -916,38 +742,342 @@ class _BoardPanelState extends State<BoardPanel> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+  Color _difficultyColor(Difficulty difficulty) {
+    switch (difficulty) {
+      case Difficulty.easy:
+        return Colors.greenAccent;
+      case Difficulty.medium:
+        return Colors.orangeAccent;
+      case Difficulty.hard:
+        return Colors.redAccent;
+    }
+  }
+
+  // -------------------------------------------------------------- settings
+  //
+  // A sheet, not a tab. iCloud sync, the AI model, and appearance are visited
+  // once and then forgotten — they do not deserve a permanent quarter of the
+  // navigation next to boards a person switches between constantly.
+
+  void _openSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) =>
+            _buildSettingsSheetContent(context, scrollController),
+      ),
+    );
+  }
+
+  Widget _buildSettingsSheetContent(
+    BuildContext context,
+    ScrollController scrollController,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 4),
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+          child: Row(
+            children: [
+              Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: BlocBuilder<SettingsCubit, SettingsState>(
+            builder: (context, state) {
+              return ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                children: [
+                  _settingsSection(context, 'Synchronization', [
+                    SwitchListTile(
+                      title: Text(
+                        'iCloud sync',
+                        style: _rowTitleStyle(context),
+                      ),
+                      subtitle: Text(
+                        'Backup & sync boards across devices',
+                        style: _metaStyle(context),
+                      ),
+                      value: state.isICloudSyncEnabled,
+                      onChanged: (val) {
+                        context.read<SettingsCubit>().toggleICloudSync();
+                        context.read<DrawingCubit>().setSyncEnabled(val);
+                      },
+                      secondary: Icon(
+                        Icons.cloud_sync_rounded,
+                        color: scheme.primary,
+                      ),
+                      activeThumbColor: scheme.primary,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    const SizedBox(height: 4),
+                    const BackupRecoverySection(),
+                  ]),
+                  const SizedBox(height: 20),
+                  _buildAiModelSection(context),
+                  const SizedBox(height: 20),
+                  _settingsSection(context, 'Appearance', [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Text('Theme', style: _rowTitleStyle(context)),
+                          const Spacer(),
+                          SegmentedButton<ThemeMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                label: Text('Light'),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                label: Text('Dark'),
+                              ),
+                            ],
+                            selected: {state.themeMode},
+                            onSelectionChanged: (selection) {
+                              if (selection.first != state.themeMode) {
+                                context.read<SettingsCubit>().toggleTheme();
+                              }
+                            },
+                            style: const ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Text('Grid', style: _rowTitleStyle(context)),
+                          const Spacer(),
+                          SegmentedButton<BackgroundPattern>(
+                            segments: const [
+                              ButtonSegment(
+                                value: BackgroundPattern.none,
+                                label: Text('None'),
+                              ),
+                              ButtonSegment(
+                                value: BackgroundPattern.grid,
+                                label: Text('Grid'),
+                              ),
+                              ButtonSegment(
+                                value: BackgroundPattern.lines,
+                                label: Text('Lines'),
+                              ),
+                            ],
+                            selected: {state.pattern},
+                            onSelectionChanged: (selection) {
+                              context.read<SettingsCubit>().setPattern(
+                                selection.first,
+                              );
+                            },
+                            style: const ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _settingsSection(
+    BuildContext context,
+    String title,
+    List<Widget> children,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...children,
+      ],
+    );
+  }
+
+  Widget _buildAiModelSection(BuildContext context) {
+    return BlocBuilder<GemmaCubit, GemmaState>(
+      builder: (context, state) {
+        return _settingsSection(context, 'AI model', [
+          switch (state.status) {
+            GemmaStatus.idle => _buildIdleState(context),
+            GemmaStatus.downloading => _buildDownloadingState(context, state),
+            GemmaStatus.ready => _buildReadyState(context),
+            GemmaStatus.error => _buildErrorState(context, state),
+          },
+        ]);
+      },
+    );
+  }
+
+  /// Deleting throws away a 1.7 GB download that has to be fetched again in
+  /// full, so it asks first.
+  Future<void> _confirmDeleteModel(BuildContext context) async {
+    final cubit = context.read<GemmaCubit>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete the AI model?'),
+        content: const Text(
+          'This frees about 1.7 GB on your device. The AI Assistant will stop '
+          'working until you download it again, and the download starts from '
+          'the beginning.\n\nYour boards are not affected.',
+          style: TextStyle(height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await cubit.deleteModel();
+  }
+
+  Widget _buildIdleState(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          title: Text('On-device AI model', style: _rowTitleStyle(context)),
+          subtitle: Text(
+            'Enhance your whiteboard with AI-powered code explanations & diagram insights (1.7 GB)',
+            style: _metaStyle(context),
+          ),
+          contentPadding: EdgeInsets.zero,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text(
+                  'Download model',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDownloadingState(BuildContext context, GemmaState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.layers_rounded,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
+              Text('Downloading AI model…', style: _rowTitleStyle(context)),
+              const Spacer(),
               Text(
-                'MY BOARDS',
+                '${(state.downloadProgress * 100).toInt()}%',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
+                  color: Theme.of(context).colorScheme.primary,
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: state.downloadProgress,
+              minHeight: 6,
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.1),
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // There is no resume: closing the app restarts the 1.7 GB fetch from
+          // zero, so say that before the user walks away from it.
           Text(
-            'Manage workspaces',
+            '1.7 GB. Keep the app open — closing it starts the download over.',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 10.5,
+              height: 1.35,
             ),
           ),
         ],
@@ -955,106 +1085,86 @@ class _BoardPanelState extends State<BoardPanel> {
     );
   }
 
-  Widget _buildBoardTile(BuildContext context, String boardId, bool isActive) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Dismissible(
-        key: Key('board_$boardId'),
-        direction: DismissDirection.endToStart,
-        confirmDismiss: (direction) async {
-          return await _confirmDeleteBoard(context, boardId);
-        },
-        onDismissed: (direction) {
-          context.read<DrawingCubit>().deleteBoard(boardId);
-        },
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 20),
-          decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.delete_outline_rounded,
-            color: Colors.redAccent,
-          ),
-        ),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            context.read<DrawingCubit>().switchToBoard(boardId);
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isActive
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.3)
-                    : Colors.transparent,
+  Widget _buildReadyState(BuildContext context) {
+    return ListTile(
+      title: Row(
+        children: [
+          Text('AI model ready', style: _rowTitleStyle(context)),
+          const SizedBox(width: 8),
+          Icon(Icons.check_circle_rounded, size: 18, color: Colors.greenAccent),
+        ],
+      ),
+      subtitle: Text(
+        'Model is installed and ready for offline use',
+        style: _metaStyle(context),
+      ),
+      trailing: TextButton(
+        onPressed: () => _confirmDeleteModel(context),
+        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+        child: const Text('Delete', style: TextStyle(fontSize: 11)),
+      ),
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, GemmaState state) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.redAccent,
+                size: 20,
               ),
+              const SizedBox(width: 8),
+              Text(
+                'Download failed',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          if (state.errorMessage != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              state.errorMessage!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            child: Row(
-              children: [
-                Icon(
-                  isActive
-                      ? Icons.description_rounded
-                      : Icons.description_outlined,
-                  size: 20,
-                  color: isActive
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    boardId,
-                    style: TextStyle(
-                      color: isActive
-                          ? Theme.of(context).colorScheme.onSurface
-                          : Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
-                      fontWeight: isActive
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      fontSize: 15,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.edit_outlined,
-                    size: 18,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                  ),
-                  onPressed: () => _showRenameBoardDialog(context, boardId),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: "Rename Board",
-                ),
-              ],
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.read<GemmaCubit>().checkAndDownload(),
+            icon: const Icon(Icons.refresh_rounded, size: 14),
+            label: const Text('Retry', style: TextStyle(fontSize: 10)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  // --------------------------------------------------------------- dialogs
 
   void _showRenameBoardDialog(BuildContext context, String oldName) {
     final controller = TextEditingController(text: oldName);
@@ -1062,7 +1172,7 @@ class _BoardPanelState extends State<BoardPanel> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('Rename Board'),
+        title: const Text('Rename board'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -1096,58 +1206,13 @@ class _BoardPanelState extends State<BoardPanel> {
     );
   }
 
-  Widget _buildAddBoardButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () => _showCreateBoardDialog(context),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('NEW WORKSPACE'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            shadowColor: Colors.transparent,
-            minimumSize: const Size(double.infinity, 54),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            textStyle: const TextStyle(
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showCreateBoardDialog(BuildContext context) {
     final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('New Workspace'),
+        title: const Text('New board'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -1195,7 +1260,7 @@ class _BoardPanelState extends State<BoardPanel> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('Delete Board?'),
+        title: const Text('Delete board?'),
         content: Text(
           'Are you sure you want to delete "$boardId"? This action cannot be undone.',
         ),

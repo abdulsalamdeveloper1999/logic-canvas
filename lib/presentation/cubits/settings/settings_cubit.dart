@@ -158,6 +158,15 @@ class SettingsCubit extends Cubit<SettingsState> {
     emit(state.copyWith(showSidebar: false));
   }
 
+  /// Opens the sidebar, whatever state it was in. Toggling was wrong for
+  /// anything that wants to *show* the user something in there — it closed the
+  /// panel on people who already had it open.
+  void openSidebar() {
+    if (state.showSidebar) return;
+    emit(state.copyWith(showSidebar: true));
+    _saveSettings();
+  }
+
   void setBrushPreset(double width) {
     emit(
       state.copyWith(

@@ -7,11 +7,13 @@ class LiveDrawingCubit extends Cubit<LiveDrawingState> {
   LiveDrawingCubit() : super(LiveDrawingState.initial());
 
   void startStroke(Stroke stroke, Offset hover) {
-    emit(state.copyWith(
-      activeStroke: stroke,
-      hoverPosition: hover,
-      revision: state.revision + 1,
-    ));
+    emit(
+      state.copyWith(
+        activeStroke: stroke,
+        hoverPosition: hover,
+        revision: state.revision + 1,
+      ),
+    );
   }
 
   void notifyChange() {
@@ -23,10 +25,7 @@ class LiveDrawingCubit extends Cubit<LiveDrawingState> {
   }
 
   void endStroke() {
-    emit(state.copyWith(
-      activeStroke: null,
-      revision: state.revision + 1,
-    ));
+    emit(state.copyWith(activeStroke: null, revision: state.revision + 1));
   }
 
   void cancel() {

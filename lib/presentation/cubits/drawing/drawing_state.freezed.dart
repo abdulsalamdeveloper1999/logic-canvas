@@ -24,6 +24,10 @@ mixin _$DrawingState {
   Map<String, String?> get boardProblems => throw _privateConstructorUsedError;
   bool get isDrawing => throw _privateConstructorUsedError;
   bool get isLoaded => throw _privateConstructorUsedError;
+
+  /// Boards whose stored data could not be read at launch. Surfaced to the
+  /// user rather than letting a board silently come back empty.
+  List<String> get damagedBoardIds => throw _privateConstructorUsedError;
   int? get selectedStrokeIndex => throw _privateConstructorUsedError;
 
   /// Create a copy of DrawingState
@@ -48,6 +52,7 @@ abstract class $DrawingStateCopyWith<$Res> {
     Map<String, String?> boardProblems,
     bool isDrawing,
     bool isLoaded,
+    List<String> damagedBoardIds,
     int? selectedStrokeIndex,
   });
 }
@@ -74,6 +79,7 @@ class _$DrawingStateCopyWithImpl<$Res, $Val extends DrawingState>
     Object? boardProblems = null,
     Object? isDrawing = null,
     Object? isLoaded = null,
+    Object? damagedBoardIds = null,
     Object? selectedStrokeIndex = freezed,
   }) {
     return _then(
@@ -106,6 +112,10 @@ class _$DrawingStateCopyWithImpl<$Res, $Val extends DrawingState>
                 ? _value.isLoaded
                 : isLoaded // ignore: cast_nullable_to_non_nullable
                       as bool,
+            damagedBoardIds: null == damagedBoardIds
+                ? _value.damagedBoardIds
+                : damagedBoardIds // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
             selectedStrokeIndex: freezed == selectedStrokeIndex
                 ? _value.selectedStrokeIndex
                 : selectedStrokeIndex // ignore: cast_nullable_to_non_nullable
@@ -133,6 +143,7 @@ abstract class _$$DrawingStateImplCopyWith<$Res>
     Map<String, String?> boardProblems,
     bool isDrawing,
     bool isLoaded,
+    List<String> damagedBoardIds,
     int? selectedStrokeIndex,
   });
 }
@@ -158,6 +169,7 @@ class __$$DrawingStateImplCopyWithImpl<$Res>
     Object? boardProblems = null,
     Object? isDrawing = null,
     Object? isLoaded = null,
+    Object? damagedBoardIds = null,
     Object? selectedStrokeIndex = freezed,
   }) {
     return _then(
@@ -190,6 +202,10 @@ class __$$DrawingStateImplCopyWithImpl<$Res>
             ? _value.isLoaded
             : isLoaded // ignore: cast_nullable_to_non_nullable
                   as bool,
+        damagedBoardIds: null == damagedBoardIds
+            ? _value._damagedBoardIds
+            : damagedBoardIds // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
         selectedStrokeIndex: freezed == selectedStrokeIndex
             ? _value.selectedStrokeIndex
             : selectedStrokeIndex // ignore: cast_nullable_to_non_nullable
@@ -210,11 +226,13 @@ class _$DrawingStateImpl extends _DrawingState {
     final Map<String, String?> boardProblems = const {},
     this.isDrawing = false,
     this.isLoaded = false,
+    final List<String> damagedBoardIds = const <String>[],
     this.selectedStrokeIndex,
   }) : _boards = boards,
        _boardIds = boardIds,
        _redoStack = redoStack,
        _boardProblems = boardProblems,
+       _damagedBoardIds = damagedBoardIds,
        super._();
 
   final Map<String, List<Stroke>> _boards;
@@ -258,12 +276,27 @@ class _$DrawingStateImpl extends _DrawingState {
   @override
   @JsonKey()
   final bool isLoaded;
+
+  /// Boards whose stored data could not be read at launch. Surfaced to the
+  /// user rather than letting a board silently come back empty.
+  final List<String> _damagedBoardIds;
+
+  /// Boards whose stored data could not be read at launch. Surfaced to the
+  /// user rather than letting a board silently come back empty.
+  @override
+  @JsonKey()
+  List<String> get damagedBoardIds {
+    if (_damagedBoardIds is EqualUnmodifiableListView) return _damagedBoardIds;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_damagedBoardIds);
+  }
+
   @override
   final int? selectedStrokeIndex;
 
   @override
   String toString() {
-    return 'DrawingState(boards: $boards, activeBoardId: $activeBoardId, boardIds: $boardIds, redoStack: $redoStack, boardProblems: $boardProblems, isDrawing: $isDrawing, isLoaded: $isLoaded, selectedStrokeIndex: $selectedStrokeIndex)';
+    return 'DrawingState(boards: $boards, activeBoardId: $activeBoardId, boardIds: $boardIds, redoStack: $redoStack, boardProblems: $boardProblems, isDrawing: $isDrawing, isLoaded: $isLoaded, damagedBoardIds: $damagedBoardIds, selectedStrokeIndex: $selectedStrokeIndex)';
   }
 
   /// Create a copy of DrawingState
@@ -284,6 +317,7 @@ abstract class _DrawingState extends DrawingState {
     final Map<String, String?> boardProblems,
     final bool isDrawing,
     final bool isLoaded,
+    final List<String> damagedBoardIds,
     final int? selectedStrokeIndex,
   }) = _$DrawingStateImpl;
   const _DrawingState._() : super._();
@@ -302,6 +336,11 @@ abstract class _DrawingState extends DrawingState {
   bool get isDrawing;
   @override
   bool get isLoaded;
+
+  /// Boards whose stored data could not be read at launch. Surfaced to the
+  /// user rather than letting a board silently come back empty.
+  @override
+  List<String> get damagedBoardIds;
   @override
   int? get selectedStrokeIndex;
 

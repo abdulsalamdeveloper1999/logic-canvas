@@ -590,6 +590,8 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                           builder: (context, settings) {
                             return BlocBuilder<DrawingCubit, DrawingState>(
                               buildWhen: (prev, curr) =>
+                                  prev.activeStrokes.length !=
+                                      curr.activeStrokes.length ||
                                   prev.activeStrokes != curr.activeStrokes ||
                                   prev.selectedStrokeIndex !=
                                       curr.selectedStrokeIndex,

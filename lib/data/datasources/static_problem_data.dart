@@ -1,6 +1,20 @@
 import 'package:logic_canvas/domain/entities/problem.dart';
 
 class ProblemData {
+  /// Every problem the app knows about, across all lists.
+  static List<Problem> get allProblems => [...paretoProblems, ...blind75];
+
+  /// Looks a problem up by id in any list. The AI panel previously searched
+  /// only the Pareto and starter lists, so opening a Blind 75 problem left the
+  /// tutor with no problem statement at all.
+  static Problem? findById(String? id) {
+    if (id == null) return null;
+    for (final problem in allProblems) {
+      if (problem.id == id) return problem;
+    }
+    return null;
+  }
+
   // Free plan: small starter pack across categories.
   // Pro unlocks the full lists (Pareto 49 / Blind 75).
   static final List<Problem> starterPack = (() {
@@ -320,6 +334,12 @@ class ProblemData {
           'https://leetcode.com/problems/longest-repeating-character-replacement/',
       description:
           'You are given a string s and an integer k. You can choose any character of the string and change it to any other uppercase English character. You can perform this operation at most k times.',
+      coachingNotes: [
+        'The valid-window check is windowLength - maxFrequency <= k.',
+        'Do NOT tell the user to decrease or recompute maxFrequency inside the '
+            'shrink loop. A stale, non-decreasing maxFrequency is correct for '
+            'the standard O(n) solution.',
+      ],
       examples: [
         ProblemExample(
           input: 's = "ABAB", k = 2',

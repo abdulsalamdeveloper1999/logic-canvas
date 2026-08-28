@@ -13,9 +13,20 @@ const String _kInstalledModelUrlKey = 'gemma_installed_model_url';
 const String _kModelUrl =
     'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm';
 
+/// flutter_gemma identifies an installed model by its filename, which is what
+/// both the install check and the uninstall call need.
+const String _kModelFileName = 'gemma-4-E4B-it.litertlm';
+
 const ModelType _kModelType = ModelType.gemma4;
-const int _kMaxContextMessages = 8;
-const int _kMaxContextCharacters = 6000;
+
+/// Context budget. The old settings let history alone consume 6,000 characters
+/// out of a 2,048-token window that also had to hold the system prompt, an
+/// image, and the answer — so replies were being squeezed out. The window is
+/// now larger, and history shrinks further when an image is attached.
+const int _kMaxTokens = 4096;
+const int _kMaxContextMessages = 6;
+const int _kMaxContextCharacters = 2400;
+const int _kMaxContextCharactersWithImage = 1200;
 
 void _llmLog(String message) {
   debugPrintSynchronously(message);
@@ -33,11 +44,40 @@ class GemmaService {
   // Short rolling history buffer for conversational context
   final List<Message> _history = [];
 
+  /// Held open between messages so each reply does not pay the model-load cost.
+  dynamic _activeModel;
+
+  /// True once the download has finished and the file is really on disk.
+  ///
+  /// The Hive flag alone is not enough: iOS can evict a 1.7 GB file under
+  /// storage pressure, and a half-finished install can leave the flag set with
+  /// no model behind it. Both cases used to surface as a confusing failure at
+  /// inference time instead of an honest "not downloaded".
   Future<void> init() async {
     final box = await Hive.openBox(_kBoxName);
     final installed = box.get(_kInstalledKey, defaultValue: false) as bool;
     final installedModelUrl = box.get(_kInstalledModelUrlKey) as String?;
-    _isInstalled = installed && installedModelUrl == _kModelUrl;
+    final flaggedInstalled = installed && installedModelUrl == _kModelUrl;
+
+    if (!flaggedInstalled) {
+      _isInstalled = false;
+      return;
+    }
+
+    try {
+      final onDisk = await FlutterGemma.isModelInstalled(_kModelFileName);
+      _isInstalled = onDisk;
+      if (!onDisk) {
+        _llmLog('🧠 GemmaService: flag said installed but the file is gone');
+        await box.put(_kInstalledKey, false);
+        await box.delete(_kInstalledModelUrlKey);
+      }
+    } catch (e) {
+      // If the check itself fails, trust the flag rather than forcing a
+      // needless 1.7 GB re-download.
+      _llmLog('🧠 GemmaService: install check failed ($e), trusting the flag');
+      _isInstalled = true;
+    }
   }
 
   Future<void> installModel() async {
@@ -51,7 +91,10 @@ class GemmaService {
         if (progress < 0 || progress > 100) {
           throw StateError('Model download failed with progress $progress');
         }
-        _progressController.add(progress / 100.0);
+        // Never let a reporting problem abort a 1.7 GB download.
+        if (!_progressController.isClosed) {
+          _progressController.add(progress / 100.0);
+        }
       }).install();
 
       final box = await Hive.openBox(_kBoxName);
@@ -85,7 +128,25 @@ class GemmaService {
     }
   }
 
+  /// Removes the downloaded model from disk and forgets it.
+  ///
+  /// [markDeleted] only ever cleared a flag, so "Delete" left the whole 1.7 GB
+  /// on the device — and the next download fetched it all over again.
+  Future<void> deleteDownloadedModel() async {
+    await _releaseModel();
+    try {
+      await FlutterGemma.uninstallModel(_kModelFileName);
+      _llmLog('🧠 GemmaService: model file removed');
+    } catch (e) {
+      // Nothing to remove, or the plugin could not find it. Clearing the flag
+      // below still lets the user re-download.
+      _llmLog('🧠 GemmaService: uninstall reported "$e"');
+    }
+    await markDeleted();
+  }
+
   Future<void> markDeleted() async {
+    await _releaseModel();
     final box = await Hive.openBox(_kBoxName);
     await box.put(_kInstalledKey, false);
     await box.delete(_kInstalledModelUrlKey);
@@ -119,7 +180,7 @@ class GemmaService {
     // from multiple addQueryChunk calls or 'isUser: false' chunks.
     final promptBuffer = StringBuffer();
     final contextHistory = includeHistory
-        ? _trimmedHistoryForPrompt()
+        ? _trimmedHistoryForPrompt(hasImage: imageBytes != null)
         : const <Message>[];
     if (contextHistory.isNotEmpty) {
       promptBuffer.writeln("--- Previous Conversation Context ---");
@@ -166,40 +227,71 @@ class GemmaService {
     } catch (e, stackTrace) {
       _llmLog('🧠 GemmaService.generateResponseStream: ERROR $e');
       _llmLog('🧠 GemmaService.generateResponseStream: STACK $stackTrace');
+      // A failed generation may have left the native session unusable, so drop
+      // the cached model and reload it next time.
+      await _releaseModel();
       rethrow;
-    } finally {
-      await model.close();
-      _llmLog('🧠 GemmaService.generateResponseStream: model closed');
     }
 
     _llmLog('🧠 GemmaService.generateResponseStream: done');
   }
 
-  Future<dynamic> _loadActiveModel() {
+  /// The loaded model is kept between messages. It used to be closed after
+  /// every reply, which made the user pay the full model-load cost each time
+  /// they asked anything.
+  Future<dynamic> _loadActiveModel() async {
+    final cached = _activeModel;
+    if (cached != null) {
+      _llmLog('🧠 GemmaService._loadActiveModel: reusing warm model');
+      return cached;
+    }
+
     _llmLog('🧠 GemmaService._loadActiveModel: loading active model');
-    return FlutterGemma.getActiveModel(
-      maxTokens: 2048,
-      supportImage: true,
-    ).timeout(
-      const Duration(minutes: 2),
-      onTimeout: () {
-        _llmLog('🧠 GemmaService._loadActiveModel: TIMEOUT after 2 minutes');
-        throw TimeoutException(
-          'Timed out loading the local AI model. Delete and re-download the '
-          'model from Settings, then try again.',
+    final model =
+        await FlutterGemma.getActiveModel(
+          maxTokens: _kMaxTokens,
+          supportImage: true,
+        ).timeout(
+          const Duration(minutes: 2),
+          onTimeout: () {
+            _llmLog(
+              '🧠 GemmaService._loadActiveModel: TIMEOUT after 2 minutes',
+            );
+            throw TimeoutException(
+              'Timed out loading the local AI model. Delete and re-download the '
+              'model from Settings, then try again.',
+            );
+          },
         );
-      },
-    );
+
+    _activeModel = model;
+    return model;
   }
 
-  List<Message> _trimmedHistoryForPrompt() {
+  Future<void> _releaseModel() async {
+    final model = _activeModel;
+    _activeModel = null;
+    if (model == null) return;
+    try {
+      await model.close();
+      _llmLog('🧠 GemmaService: model closed');
+    } catch (e) {
+      _llmLog('🧠 GemmaService: error closing model ($e)');
+    }
+  }
+
+  List<Message> _trimmedHistoryForPrompt({bool hasImage = false}) {
+    final characterBudget = hasImage
+        ? _kMaxContextCharactersWithImage
+        : _kMaxContextCharacters;
+
     var totalCharacters = 0;
     final kept = <Message>[];
 
     for (final message in _history.reversed) {
       final messageLength = message.text.length;
       if (kept.length >= _kMaxContextMessages ||
-          totalCharacters + messageLength > _kMaxContextCharacters) {
+          totalCharacters + messageLength > characterBudget) {
         break;
       }
       kept.add(message);
@@ -216,7 +308,19 @@ class GemmaService {
       ..addAll(kept);
   }
 
-  void dispose() {
-    _progressController.close();
+  /// Frees the loaded model but keeps the service usable.
+  ///
+  /// This is a lazySingleton shared by every [GemmaCubit]. Closing the progress
+  /// stream here would kill it for the whole app: once closed it can never
+  /// reopen, so the next download would report no progress and — because the
+  /// old code threw when adding to a closed controller — fail outright.
+  Future<void> releaseResources() async {
+    await _releaseModel();
+  }
+
+  /// Only for application teardown, when nothing will use this service again.
+  Future<void> disposeSingleton() async {
+    await _releaseModel();
+    await _progressController.close();
   }
 }

@@ -76,12 +76,7 @@ class WhiteboardPainter extends CustomPainter {
 
     _drawStrokes(canvas, size, strokes, isActive: false);
     if (activeStroke != null) {
-      _drawStrokes(
-        canvas,
-        size,
-        [activeStroke!],
-        isActive: true,
-      );
+      _drawStrokes(canvas, size, [activeStroke!], isActive: true);
     }
 
     if (selectionRect != null) {

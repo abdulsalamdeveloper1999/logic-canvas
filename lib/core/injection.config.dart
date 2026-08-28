@@ -11,13 +11,16 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:injectable/injectable.dart' as _i526;
+import 'package:logic_canvas/data/repositories/board_store.dart' as _i608;
 import 'package:logic_canvas/data/repositories/progress_repository_impl.dart'
     as _i447;
+import 'package:logic_canvas/data/services/backup_service.dart' as _i798;
 import 'package:logic_canvas/data/services/export_service.dart' as _i51;
 import 'package:logic_canvas/data/services/gemma_service.dart' as _i355;
 import 'package:logic_canvas/data/services/handwriting_service.dart' as _i818;
 import 'package:logic_canvas/data/services/icloud_sync_service.dart' as _i474;
 import 'package:logic_canvas/data/services/ml_shape_service.dart' as _i134;
+import 'package:logic_canvas/data/services/snapshot_service.dart' as _i302;
 import 'package:logic_canvas/data/services/subscription_service.dart' as _i233;
 import 'package:logic_canvas/domain/repositories/i_progress_repository.dart'
     as _i790;
@@ -42,11 +45,14 @@ extension GetItInjectableX on _i174.GetIt {
   }) {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
     gh.factory<_i202.SelectionCubit>(() => _i202.SelectionCubit());
+    gh.lazySingleton<_i608.BoardStore>(() => _i608.BoardStore());
     gh.lazySingleton<_i355.GemmaService>(() => _i355.GemmaService());
     gh.lazySingleton<_i134.MLShapeService>(() => _i134.MLShapeService());
+    gh.lazySingleton<_i302.SnapshotService>(() => _i302.SnapshotService());
     gh.lazySingleton<_i818.HandwritingRecognitionService>(
       () => _i818.HandwritingRecognitionService(),
     );
+    gh.lazySingleton<_i798.BackupService>(() => _i798.BackupService());
     gh.lazySingleton<_i51.ExportService>(() => _i51.ExportService());
     gh.lazySingleton<_i233.SubscriptionService>(
       () => _i233.RevenueCatSubscriptionService(),
@@ -77,6 +83,8 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i818.HandwritingRecognitionService>(),
         gh<_i134.MLShapeService>(),
         gh<_i474.ICloudSyncService>(),
+        gh<_i608.BoardStore>(),
+        gh<_i302.SnapshotService>(),
       ),
     );
     return this;

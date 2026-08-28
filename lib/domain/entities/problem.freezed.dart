@@ -206,6 +206,14 @@ mixin _$Problem {
   String? get description => throw _privateConstructorUsedError;
   List<ProblemExample> get examples => throw _privateConstructorUsedError;
 
+  /// Corrections the AI tutor gets wrong on this specific problem, injected
+  /// only when this problem is open. These used to live in the global system
+  /// prompt, where they confused the model on every other problem.
+  List<String> get coachingNotes => throw _privateConstructorUsedError;
+
+  /// Id of the animated walkthrough that teaches this problem's pattern.
+  String? get traceId => throw _privateConstructorUsedError;
+
   /// Create a copy of Problem
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -226,6 +234,8 @@ abstract class $ProblemCopyWith<$Res> {
     List<String> hints,
     String? description,
     List<ProblemExample> examples,
+    List<String> coachingNotes,
+    String? traceId,
   });
 }
 
@@ -252,6 +262,8 @@ class _$ProblemCopyWithImpl<$Res, $Val extends Problem>
     Object? hints = null,
     Object? description = freezed,
     Object? examples = null,
+    Object? coachingNotes = null,
+    Object? traceId = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -287,6 +299,14 @@ class _$ProblemCopyWithImpl<$Res, $Val extends Problem>
                 ? _value.examples
                 : examples // ignore: cast_nullable_to_non_nullable
                       as List<ProblemExample>,
+            coachingNotes: null == coachingNotes
+                ? _value.coachingNotes
+                : coachingNotes // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            traceId: freezed == traceId
+                ? _value.traceId
+                : traceId // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -310,6 +330,8 @@ abstract class _$$ProblemImplCopyWith<$Res> implements $ProblemCopyWith<$Res> {
     List<String> hints,
     String? description,
     List<ProblemExample> examples,
+    List<String> coachingNotes,
+    String? traceId,
   });
 }
 
@@ -335,6 +357,8 @@ class __$$ProblemImplCopyWithImpl<$Res>
     Object? hints = null,
     Object? description = freezed,
     Object? examples = null,
+    Object? coachingNotes = null,
+    Object? traceId = freezed,
   }) {
     return _then(
       _$ProblemImpl(
@@ -370,6 +394,14 @@ class __$$ProblemImplCopyWithImpl<$Res>
             ? _value._examples
             : examples // ignore: cast_nullable_to_non_nullable
                   as List<ProblemExample>,
+        coachingNotes: null == coachingNotes
+            ? _value._coachingNotes
+            : coachingNotes // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        traceId: freezed == traceId
+            ? _value.traceId
+            : traceId // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -387,8 +419,11 @@ class _$ProblemImpl implements _Problem {
     final List<String> hints = const [],
     this.description,
     final List<ProblemExample> examples = const [],
+    final List<String> coachingNotes = const [],
+    this.traceId,
   }) : _hints = hints,
-       _examples = examples;
+       _examples = examples,
+       _coachingNotes = coachingNotes;
 
   @override
   final String id;
@@ -420,9 +455,29 @@ class _$ProblemImpl implements _Problem {
     return EqualUnmodifiableListView(_examples);
   }
 
+  /// Corrections the AI tutor gets wrong on this specific problem, injected
+  /// only when this problem is open. These used to live in the global system
+  /// prompt, where they confused the model on every other problem.
+  final List<String> _coachingNotes;
+
+  /// Corrections the AI tutor gets wrong on this specific problem, injected
+  /// only when this problem is open. These used to live in the global system
+  /// prompt, where they confused the model on every other problem.
+  @override
+  @JsonKey()
+  List<String> get coachingNotes {
+    if (_coachingNotes is EqualUnmodifiableListView) return _coachingNotes;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_coachingNotes);
+  }
+
+  /// Id of the animated walkthrough that teaches this problem's pattern.
+  @override
+  final String? traceId;
+
   @override
   String toString() {
-    return 'Problem(id: $id, title: $title, url: $url, difficulty: $difficulty, category: $category, hints: $hints, description: $description, examples: $examples)';
+    return 'Problem(id: $id, title: $title, url: $url, difficulty: $difficulty, category: $category, hints: $hints, description: $description, examples: $examples, coachingNotes: $coachingNotes, traceId: $traceId)';
   }
 
   @override
@@ -440,7 +495,12 @@ class _$ProblemImpl implements _Problem {
             const DeepCollectionEquality().equals(other._hints, _hints) &&
             (identical(other.description, description) ||
                 other.description == description) &&
-            const DeepCollectionEquality().equals(other._examples, _examples));
+            const DeepCollectionEquality().equals(other._examples, _examples) &&
+            const DeepCollectionEquality().equals(
+              other._coachingNotes,
+              _coachingNotes,
+            ) &&
+            (identical(other.traceId, traceId) || other.traceId == traceId));
   }
 
   @override
@@ -454,6 +514,8 @@ class _$ProblemImpl implements _Problem {
     const DeepCollectionEquality().hash(_hints),
     description,
     const DeepCollectionEquality().hash(_examples),
+    const DeepCollectionEquality().hash(_coachingNotes),
+    traceId,
   );
 
   /// Create a copy of Problem
@@ -475,6 +537,8 @@ abstract class _Problem implements Problem {
     final List<String> hints,
     final String? description,
     final List<ProblemExample> examples,
+    final List<String> coachingNotes,
+    final String? traceId,
   }) = _$ProblemImpl;
 
   @override
@@ -493,6 +557,16 @@ abstract class _Problem implements Problem {
   String? get description;
   @override
   List<ProblemExample> get examples;
+
+  /// Corrections the AI tutor gets wrong on this specific problem, injected
+  /// only when this problem is open. These used to live in the global system
+  /// prompt, where they confused the model on every other problem.
+  @override
+  List<String> get coachingNotes;
+
+  /// Id of the animated walkthrough that teaches this problem's pattern.
+  @override
+  String? get traceId;
 
   /// Create a copy of Problem
   /// with the given fields replaced by the non-null parameter values.

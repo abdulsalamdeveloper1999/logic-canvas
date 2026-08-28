@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+// Not re-exported by the barrel file in 0.12.8, but public and outside lib/src/.
+import 'package:liquid_glass_widgets/widgets/shared/animated_glass_indicator.dart';
 
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
@@ -51,48 +54,66 @@ class _HomePageState extends State<HomePage> {
     );
 
     return Scaffold(
-      body: BlocBuilder<SettingsCubit, SettingsState>(
-        builder: (context, settings) {
-          return Stack(
-            children: [
-              Positioned.fill(child: const WhiteboardView()),
+      // Isolates the backdrop this screen's glass samples from. Without it the
+      // bars can refract a stale snapshot left behind by a previous route,
+      // which shows up as a ghost image frozen inside the glass.
+      body: GlassBackdropScope(
+        child: BlocBuilder<SettingsCubit, SettingsState>(
+          builder: (context, settings) {
+            return Stack(
+              children: [
+                Positioned.fill(child: const WhiteboardView()),
 
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _buildTopBar(context, isSubscribed),
-              ),
-
-              _buildSidebar(context, settings, sidebarWidth),
-
-              _buildComprehensiveToolbar(context, settings, orientation),
-
-              Positioned(
-                top: 90,
-                right: 20,
-                child: _buildProblemDescriptionPanel(context),
-              ),
-
-              if (_isAiPanelOpen)
                 Positioned(
-                  left: _aiPanelPosition.dx,
-                  top: _aiPanelPosition.dy,
-                  child: AiAssistantPanel(
-                    onClose: () => setState(() => _isAiPanelOpen = false),
-                    onPanUpdate: (details) {
-                      setState(() {
-                        _aiPanelPosition += details.delta;
-                      });
-                    },
-                  ),
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildTopBar(context, isSubscribed),
                 ),
-            ],
-          );
-        },
+
+                _buildSidebar(context, settings, sidebarWidth),
+
+                _buildComprehensiveToolbar(context, settings, orientation),
+
+                Positioned(
+                  top: 90,
+                  right: 20,
+                  child: _buildProblemDescriptionPanel(context),
+                ),
+
+                if (_isAiPanelOpen)
+                  Positioned(
+                    left: _aiPanelPosition.dx,
+                    top: _aiPanelPosition.dy,
+                    child: _pointerShield(
+                      AiAssistantPanel(
+                        onClose: () => setState(() => _isAiPanelOpen = false),
+                        onPanUpdate: (details) {
+                          setState(() {
+                            _aiPanelPosition += details.delta;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
+
+  /// Chrome floating over the board has to swallow pointers itself.
+  ///
+  /// The glass surfaces paint through a shader instead of an opaque box, and
+  /// `BackdropFilter` + `DecoratedBox` claim no hits either, so for hit-testing
+  /// these bars are holes: a tap that lands on a bar but misses a button falls
+  /// straight through to the canvas and commits a stray one-point dot. That is
+  /// what made undo look broken — each press undid the invisible dot the press
+  /// before it had drawn, so the user's own strokes never went anywhere.
+  Widget _pointerShield(Widget child) =>
+      Listener(behavior: HitTestBehavior.opaque, child: child);
 
   Widget _buildProblemDescriptionPanel(BuildContext context) {
     return BlocBuilder<DrawingCubit, DrawingState>(
@@ -113,155 +134,162 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              GestureDetector(
-                onTap: () => setState(
-                  () => _isDescriptionExpanded = !_isDescriptionExpanded,
-                ),
-                child: Container(
-                  height: 44,
-                  width: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+              _pointerShield(
+                GestureDetector(
+                  onTap: () => setState(
+                    () => _isDescriptionExpanded = !_isDescriptionExpanded,
                   ),
-                  child: Icon(
-                    _isDescriptionExpanded
-                        ? Icons.close_rounded
-                        : Icons.menu_book_rounded,
-                    color: Colors.white,
-                    size: 20,
+                  child: Container(
+                    height: 44,
+                    width: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      _isDescriptionExpanded
+                          ? Icons.close_rounded
+                          : Icons.menu_book_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
               ),
               if (_isDescriptionExpanded) ...[
                 const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surface.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
+                _pointerShield(
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.6,
+                        ),
+                        decoration: BoxDecoration(
                           color: Theme.of(
                             context,
-                          ).dividerColor.withValues(alpha: 0.1),
+                          ).colorScheme.surface.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).dividerColor.withValues(alpha: 0.1),
+                          ),
                         ),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getDifficultyColor(
-                                      problem.difficulty,
-                                    ).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    problem.difficulty.name.toUpperCase(),
-                                    style: TextStyle(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: _getDifficultyColor(
                                         problem.difficulty,
+                                      ).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      problem.difficulty.name.toUpperCase(),
+                                      style: TextStyle(
+                                        color: _getDifficultyColor(
+                                          problem.difficulty,
+                                        ),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
                                       ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    problem.category,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                problem.title,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                const SizedBox(width: 8),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                problem.description ??
+                                    'No description available.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                  fontSize: 14,
+                                  height: 1.5,
+                                ),
+                              ),
+                              if (problem.examples.isNotEmpty) ...[
+                                const SizedBox(height: 24),
                                 Text(
-                                  problem.category,
+                                  "EXAMPLES",
                                   style: TextStyle(
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onSurfaceVariant,
                                     fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ...problem.examples.map(
+                                  (ex) => _buildExampleItem(ex),
+                                ),
+                              ],
+                              if (problem.hints.isNotEmpty) ...[
+                                const SizedBox(height: 24),
+                                Text(
+                                  "HINTS",
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ...problem.hints.asMap().entries.map(
+                                  (entry) => _buildHintItem(
+                                    entry.key + 1,
+                                    entry.value,
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              problem.title,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              problem.description ??
-                                  'No description available.',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.7),
-                                fontSize: 14,
-                                height: 1.5,
-                              ),
-                            ),
-                            if (problem.examples.isNotEmpty) ...[
-                              const SizedBox(height: 24),
-                              Text(
-                                "EXAMPLES",
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              ...problem.examples.map(
-                                (ex) => _buildExampleItem(ex),
-                              ),
                             ],
-                            if (problem.hints.isNotEmpty) ...[
-                              const SizedBox(height: 24),
-                              Text(
-                                "HINTS",
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              ...problem.hints.asMap().entries.map(
-                                (entry) =>
-                                    _buildHintItem(entry.key + 1, entry.value),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -423,86 +451,90 @@ class _HomePageState extends State<HomePage> {
       (EntitlementsCubit c) => c.state.isSubscribed,
     );
     // final selectedProblem = null; // We are moving away from problem-locked boards
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+    return _pointerShield(
+      ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // AI Intelligence
-              _smallToggleButton(
-                context,
-                Icons.draw_rounded,
-                () => isSubscribed
-                    ? context.read<SettingsCubit>().toggleShapeDetection()
-                    : UpgradeDialog.show(context),
-                isSubscribed && settings.enableShapeDetection,
-                tooltip: "Shape Detector",
-              ),
-              _smallToggleButton(
-                context,
-                Icons.text_fields_rounded,
-                () => isSubscribed
-                    ? context
-                          .read<SettingsCubit>()
-                          .toggleHandwritingRecognition()
-                    : UpgradeDialog.show(context),
-                isSubscribed && settings.enableHandwritingRecognition,
-                tooltip: "Paint to Text (Handwriting)",
-              ),
-
-              _divider(),
-
-              // Zoom Controls
-              _smallIconButton(
-                context,
-                Icons.zoom_out_rounded,
-                () => context.read<SettingsCubit>().setZoom(
-                  settings.zoomLevel - 0.2,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // AI Intelligence
+                _smallToggleButton(
+                  context,
+                  Icons.draw_rounded,
+                  () => isSubscribed
+                      ? context.read<SettingsCubit>().toggleShapeDetection()
+                      : UpgradeDialog.show(context),
+                  isSubscribed && settings.enableShapeDetection,
+                  tooltip: "Shape Detector",
                 ),
-                tooltip: "Zoom Out",
-              ),
-              _smallIconButton(
-                context,
-                Icons.zoom_in_rounded,
-                () => context.read<SettingsCubit>().setZoom(
-                  settings.zoomLevel + 0.2,
+                _smallToggleButton(
+                  context,
+                  Icons.text_fields_rounded,
+                  () => isSubscribed
+                      ? context
+                            .read<SettingsCubit>()
+                            .toggleHandwritingRecognition()
+                      : UpgradeDialog.show(context),
+                  isSubscribed && settings.enableHandwritingRecognition,
+                  tooltip: "Paint to Text (Handwriting)",
                 ),
-                tooltip: "Zoom In",
-              ),
-              _smallIconButton(
-                context,
-                Icons.center_focus_strong_outlined,
-                () => context.read<SettingsCubit>().resetTransform(),
-                color:
-                    (settings.panOffset != Offset.zero ||
-                        settings.zoomLevel != 1.0)
-                    ? Colors.blueAccent
-                    : null,
-                tooltip: "Reset View",
-              ),
 
-              _divider(),
+                _divider(),
 
-              // Global Actions
-              _smallIconButton(
-                context,
-                Icons.delete_sweep_rounded,
-                () => _confirmClearBoard(context),
-                color: Colors.redAccent.withValues(alpha: 0.8),
-                tooltip: "Clear Board",
-              ),
-            ],
+                // Zoom Controls
+                _smallIconButton(
+                  context,
+                  Icons.zoom_out_rounded,
+                  () => context.read<SettingsCubit>().setZoom(
+                    settings.zoomLevel - 0.2,
+                  ),
+                  tooltip: "Zoom Out",
+                ),
+                _smallIconButton(
+                  context,
+                  Icons.zoom_in_rounded,
+                  () => context.read<SettingsCubit>().setZoom(
+                    settings.zoomLevel + 0.2,
+                  ),
+                  tooltip: "Zoom In",
+                ),
+                _smallIconButton(
+                  context,
+                  Icons.center_focus_strong_outlined,
+                  () => context.read<SettingsCubit>().resetTransform(),
+                  color:
+                      (settings.panOffset != Offset.zero ||
+                          settings.zoomLevel != 1.0)
+                      ? Colors.blueAccent
+                      : null,
+                  tooltip: "Reset View",
+                ),
+
+                _divider(),
+
+                // Global Actions
+                _smallIconButton(
+                  context,
+                  Icons.delete_sweep_rounded,
+                  () => _confirmClearBoard(context),
+                  color: Colors.redAccent.withValues(alpha: 0.8),
+                  tooltip: "Clear Board",
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -547,14 +579,24 @@ class _HomePageState extends State<HomePage> {
     );
     if (gemmaState.status != GemmaStatus.ready) {
       _llmLog('🧠 HomePage._showAiDialog: blocked because model is not ready');
+      // Open the sidebar on the way out rather than only naming it in a toast:
+      // the download lives in there, and the old action *toggled* the sidebar,
+      // so it closed the panel for anyone who already had it open.
+      context.read<SettingsCubit>().openSidebar();
       AppToast.show(
         context,
-        message:
-            'AI model not downloaded. Go to Settings → AI Model to download.',
-        actionLabel: 'Settings',
-        onAction: () {
-          context.read<SettingsCubit>().toggleSidebar();
+        message: switch (gemmaState.status) {
+          GemmaStatus.downloading =>
+            'The AI model is still downloading — see the progress in the '
+                'sidebar.',
+          GemmaStatus.error =>
+            'The AI model did not finish downloading. Try again from the '
+                'sidebar.',
+          _ =>
+            'The AI assistant needs a one-time 1.7 GB model download. It is '
+                'under AI MODEL in the sidebar.',
         },
+        duration: const Duration(seconds: 4),
       );
       return;
     }
@@ -566,89 +608,44 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMainIntegratedBar(BuildContext context, SettingsState settings) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(35),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(35),
-            border: Border.all(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(
-                  context,
-                ).colorScheme.shadow.withValues(alpha: 0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Core Tools
-              _toolbarButton(
-                context,
-                Icons.edit_rounded,
-                () => context.read<SettingsCubit>().setToolMode(ToolMode.pen),
-                settings.toolMode == ToolMode.pen,
-                tooltip: "Pen",
-              ),
-              _toolbarButton(
-                context,
-                Icons.pan_tool_rounded,
-                () => context.read<SettingsCubit>().setToolMode(ToolMode.hand),
-                settings.toolMode == ToolMode.hand,
-                tooltip: "Hand (Pan)",
-              ),
-              _toolbarButton(
-                context,
-                Icons.select_all_rounded,
-                () =>
-                    context.read<SettingsCubit>().setToolMode(ToolMode.select),
-                settings.toolMode == ToolMode.select,
-                tooltip: "Select & Move",
-              ),
-              _toolbarButton(
-                context,
-                Icons.device_hub_rounded,
-                () => context.read<SettingsCubit>().setToolMode(
-                  ToolMode.connector,
-                ),
-                settings.toolMode == ToolMode.connector,
-                tooltip: "Connector",
-              ),
-              _toolbarButton(
-                context,
-                Icons.category_rounded,
-                () =>
-                    context.read<SettingsCubit>().setToolMode(ToolMode.diagram),
-                settings.toolMode == ToolMode.diagram,
-                tooltip: "Diagram Icons",
-              ),
-              _toolbarButton(
-                context,
-                Icons.auto_fix_high_rounded,
-                () =>
-                    context.read<SettingsCubit>().setToolMode(ToolMode.eraser),
-                settings.toolMode == ToolMode.eraser,
-                tooltip: "Eraser",
-              ),
+    // The floating tool bar. A superellipse ("squircle") is the shape Apple
+    // uses for Liquid Glass controls, and it reads better than a plain rounded
+    // rectangle at this corner radius.
+    // A floating pill sits over the board with nothing behind it but artwork,
+    // so it carries the strongest settings in the app: thicker glass, more
+    // refraction, and a brighter rim. This is the surface the eye lands on.
+    return _pointerShield(
+      GlassContainer(
+        shape: const LiquidRoundedSuperellipse(borderRadius: 35),
+        padding: const EdgeInsets.all(8),
+        allowElevation: true,
+        useOwnLayer: true,
+        glowIntensity: 0.9,
+        quality: GlassQuality.premium,
+        settings: const LiquidGlassSettings(
+          thickness: 34,
+          refractiveIndex: 1.52,
+          chromaticAberration: 0.05,
+          lightIntensity: 1.0,
+          ambientStrength: 0.2,
+          specularSharpness: GlassSpecularSharpness.sharp,
+          blur: 7,
+          saturation: 1.6,
+          glowIntensity: 0.9,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Core Tools — one liquid selector rather than six independent
+            // buttons, so switching tools flows instead of just recolouring.
+            _buildLiquidToolSelector(context, settings),
 
-              _divider(),
+            _divider(),
 
-              _buildToolSpecificControls(context, settings),
+            _buildToolSpecificControls(context, settings),
 
-              // Styled Preview (Empty space or divider could go here)
-            ],
-          ),
+            // Styled Preview (Empty space or divider could go here)
+          ],
         ),
       ),
     );
@@ -659,56 +656,58 @@ class _HomePageState extends State<HomePage> {
     SettingsState settings,
   ) {
     final iconPath = settings.selectedIconPath;
-    return GestureDetector(
-      onTap: () => _showIconPicker(context, settings),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.blueAccent.withValues(alpha: 0.3),
+    return _pointerShield(
+      GestureDetector(
+        onTap: () => _showIconPicker(context, settings),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.blueAccent.withValues(alpha: 0.3),
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Reduce preview icon size (~1.2x smaller).
-                if (iconPath != null)
-                  SvgPicture.asset(iconPath, width: 20, height: 20)
-                else
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Reduce preview icon size (~1.2x smaller).
+                  if (iconPath != null)
+                    SvgPicture.asset(iconPath, width: 20, height: 20)
+                  else
+                    const Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: Colors.blueAccent,
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    iconPath
+                            ?.split('/')
+                            .last
+                            .split('.')
+                            .first
+                            .replaceAll('-', ' ')
+                            .toUpperCase() ??
+                        "SEARCH CLOUD ICONS",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.blueAccent,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
                   const Icon(
-                    Icons.search_rounded,
+                    Icons.arrow_right_rounded,
                     size: 20,
                     color: Colors.blueAccent,
                   ),
-                const SizedBox(width: 8),
-                Text(
-                  iconPath
-                          ?.split('/')
-                          .last
-                          .split('.')
-                          .first
-                          .replaceAll('-', ' ')
-                          .toUpperCase() ??
-                      "SEARCH CLOUD ICONS",
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.blueAccent,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const Icon(
-                  Icons.arrow_right_rounded,
-                  size: 20,
-                  color: Colors.blueAccent,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -784,23 +783,25 @@ class _HomePageState extends State<HomePage> {
             top: 0,
             bottom: 0,
             width: width,
-            child: ClipRRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surface.withValues(alpha: 0.9),
-                    border: Border(
-                      right: BorderSide(
-                        color: Theme.of(
-                          context,
-                        ).dividerColor.withValues(alpha: 0.1),
+            child: _pointerShield(
+              ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surface.withValues(alpha: 0.9),
+                      border: Border(
+                        right: BorderSide(
+                          color: Theme.of(
+                            context,
+                          ).dividerColor.withValues(alpha: 0.1),
+                        ),
                       ),
                     ),
+                    child: const BoardPanel(),
                   ),
-                  child: const BoardPanel(),
                 ),
               ),
             ),
@@ -808,27 +809,29 @@ class _HomePageState extends State<HomePage> {
           Positioned(
             left: width + 10,
             top: 100,
-            child: GestureDetector(
-              onTap: () => context.read<SettingsCubit>().toggleSidebar(),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                  border: Border.all(
+            child: _pointerShield(
+              GestureDetector(
+                onTap: () => context.read<SettingsCubit>().toggleSidebar(),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
                     color: Theme.of(
                       context,
-                    ).dividerColor.withValues(alpha: 0.1),
+                    ).colorScheme.surface.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).dividerColor.withValues(alpha: 0.1),
+                    ),
                   ),
-                ),
-                child: Icon(
-                  settings.showSidebar
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                  color: Colors.blueAccent,
+                  child: Icon(
+                    settings.showSidebar
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    color: Colors.blueAccent,
+                  ),
                 ),
               ),
             ),
@@ -839,98 +842,149 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildTopBar(BuildContext context, bool isSubscribed) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.05),
-              ),
-            ),
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Row(
-              children: [
-                const Text(
-                  "LogicCanvas",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                  ),
+    // The assistant is the app's headline feature and sits behind a 1.7 GB
+    // download. Without a mark on the button, the only way to learn that was to
+    // tap it and read a toast.
+    final aiReady =
+        context.select((GemmaCubit c) => c.state.status) == GemmaStatus.ready;
+    // Two floating pills rather than one full-width strip. A frosted band
+    // bolted to the top edge reads as chrome bolted onto the board; separate
+    // groups read as controls resting over it, and the artwork stays visible
+    // between them. Same language as the floating toolbar at the bottom.
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: Row(
+          children: [
+            _pointerShield(
+              _glassPill(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 6,
                 ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.blueAccent.withValues(alpha: 0.2),
-                        Colors.blueAccent.withValues(alpha: 0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.blueAccent.withValues(alpha: 0.3),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blueAccent.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        spreadRadius: 1,
+                // 44 is the icon-button height in the other pill, so the two
+                // sit at the same height instead of one riding slightly high.
+                child: SizedBox(
+                  height: 44,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "LogicCanvas",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.blueAccent.withValues(alpha: 0.2),
+                              Colors.blueAccent.withValues(alpha: 0.05),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.blueAccent.withValues(alpha: 0.3),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blueAccent.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          "PREMIUM",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.blueAccent,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: const Text(
-                    "PREMIUM",
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.blueAccent,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
                 ),
-                const Spacer(),
-                // History (Undo/Redo)
-                _topBarIconButton(
-                  context,
-                  Icons.undo_rounded,
-                  () => context.read<DrawingCubit>().undo(),
-                  tooltip: "Undo",
-                ),
-                const SizedBox(width: 4),
-                _topBarIconButton(
-                  context,
-                  Icons.redo_rounded,
-                  () => context.read<DrawingCubit>().redo(),
-                  tooltip: "Redo",
-                ),
-                const SizedBox(width: 8),
-                _topBarIconButton(
-                  context,
-                  Icons.auto_awesome_rounded,
-                  () => _showAiDialog(context),
-                  color: Colors.blueAccent.withValues(alpha: 0.9),
-                  tooltip: "AI Assistant",
-                ),
-                const SizedBox(width: 16),
-
-                // Export Button
-                _buildExportButton(context),
-              ],
+              ),
             ),
-          ),
+
+            // The board shows through here.
+            const Spacer(),
+
+            _pointerShield(
+              _glassPill(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // History (Undo/Redo)
+                    _topBarIconButton(
+                      context,
+                      Icons.undo_rounded,
+                      () => context.read<DrawingCubit>().undo(),
+                      tooltip: "Undo",
+                    ),
+                    const SizedBox(width: 4),
+                    _topBarIconButton(
+                      context,
+                      Icons.redo_rounded,
+                      () => context.read<DrawingCubit>().redo(),
+                      tooltip: "Redo",
+                    ),
+                    const SizedBox(width: 8),
+                    _topBarIconButton(
+                      context,
+                      Icons.auto_awesome_rounded,
+                      () => _showAiDialog(context),
+                      color: Colors.blueAccent.withValues(alpha: 0.9),
+                      tooltip: aiReady
+                          ? "AI Assistant"
+                          : "AI Assistant — model not downloaded yet",
+                      needsAttention: !aiReady,
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Export Button
+                    _buildExportButton(context),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  /// One floating group in the top bar.
+  ///
+  /// Superellipse corners and its own refraction pass, so each pill bends the
+  /// board underneath it rather than sharing a flattened backdrop with the
+  /// other chrome. Premium is Impeller-only and is the tier that runs the real
+  /// texture capture; adaptive quality picks a cheaper one and flattens it.
+  Widget _glassPill({required Widget child, required EdgeInsets padding}) {
+    return GlassContainer(
+      shape: const LiquidRoundedSuperellipse(borderRadius: 28),
+      padding: padding,
+      allowElevation: true,
+      useOwnLayer: true,
+      glowIntensity: 0.55,
+      quality: GlassQuality.premium,
+      child: child,
     );
   }
 
@@ -940,31 +994,58 @@ class _HomePageState extends State<HomePage> {
     VoidCallback? onPressed, {
     String? tooltip,
     Color? color,
+    bool needsAttention = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: IconButton(
-        icon: Icon(
-          icon,
-          color:
-              color ??
-              (onPressed == null
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.1)
-                  : Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.8)),
-          size: 22,
-        ),
-        onPressed: onPressed,
-        tooltip: tooltip,
-        splashRadius: 24,
-        hoverColor: Theme.of(
+    final enabled = onPressed != null;
+    final tint =
+        color ??
+        Theme.of(
           context,
-        ).colorScheme.onSurface.withValues(alpha: 0.05),
-      ),
+        ).colorScheme.onSurface.withValues(alpha: enabled ? 0.85 : 0.25);
+
+    final button = GlassIconButton(
+      icon: Icon(icon, size: 22, color: tint),
+      onPressed: onPressed ?? () {},
+      size: 44,
+      // A capsule that compresses under the finger, which is what reads as
+      // "live glass" rather than a flat translucent panel.
+      interactionScale: 0.92,
+      glowColor: color,
+      glowRadius: 18,
     );
+
+    final marked = needsAttention
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              button,
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.orangeAccent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.surface,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : button;
+
+    final withOpacity = enabled
+        ? marked
+        : Opacity(opacity: 0.45, child: IgnorePointer(child: marked));
+
+    return tooltip == null
+        ? withOpacity
+        : Tooltip(message: tooltip, child: withOpacity);
   }
 
   Widget _buildExportButton(BuildContext context) {
@@ -1253,29 +1334,122 @@ class _HomePageState extends State<HomePage> {
     ),
   );
 
-  Widget _toolbarButton(
+  /// The six drawing tools with a single glass indicator that slides between
+  /// them.
+  ///
+  /// Previously each tool was an independent IconButton whose icon simply
+  /// changed colour when selected — nothing moved, which is why the bar felt
+  /// static rather than liquid. This mirrors how the package's own
+  /// GlassSegmentedControl drives its indicator: a velocity spring feeds
+  /// AnimatedGlassIndicator, which squashes and stretches the glass in the
+  /// direction of travel and settles with a bounce.
+  Widget _buildLiquidToolSelector(
     BuildContext context,
-    IconData icon,
-    VoidCallback onPressed,
-    bool active, {
-    Color? color,
-    String? tooltip,
-  }) {
-    return Tooltip(
-      message: tooltip ?? "",
-      child: IconButton(
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          onPressed();
+    SettingsState settings,
+  ) {
+    const tools = <({IconData icon, ToolMode mode, String tooltip})>[
+      (icon: Icons.edit_rounded, mode: ToolMode.pen, tooltip: 'Pen'),
+      (
+        icon: Icons.pan_tool_rounded,
+        mode: ToolMode.hand,
+        tooltip: 'Hand (Pan)',
+      ),
+      (
+        icon: Icons.select_all_rounded,
+        mode: ToolMode.select,
+        tooltip: 'Select & Move',
+      ),
+      (
+        icon: Icons.device_hub_rounded,
+        mode: ToolMode.connector,
+        tooltip: 'Connector',
+      ),
+      (
+        icon: Icons.category_rounded,
+        mode: ToolMode.diagram,
+        tooltip: 'Diagram Icons',
+      ),
+      (
+        icon: Icons.auto_fix_high_rounded,
+        mode: ToolMode.eraser,
+        tooltip: 'Eraser',
+      ),
+    ];
+
+    const itemWidth = 52.0;
+    final scheme = Theme.of(context).colorScheme;
+
+    var selected = tools.indexWhere((t) => t.mode == settings.toolMode);
+    if (selected < 0) selected = 0;
+
+    // -1 .. 1 across the row, the same mapping the package uses internally.
+    final target = (selected / (tools.length - 1)).clamp(0.0, 1.0) * 2 - 1;
+
+    return SizedBox(
+      width: itemWidth * tools.length,
+      height: 48,
+      child: VelocitySpringBuilder(
+        value: target,
+        springWhenActive: GlassSpring.interactive(),
+        springWhenReleased: GlassSpring.snappy(
+          duration: const Duration(milliseconds: 380),
+        ),
+        active: false,
+        builder: (context, value, velocity, child) {
+          return SpringBuilder(
+            spring: GlassSpring.snappy(
+              duration: const Duration(milliseconds: 300),
+            ),
+            // Bloom the glass while the indicator is still travelling, then
+            // let it settle — this is what sells it as liquid rather than a
+            // sliding rectangle.
+            value: (value - target).abs() > 0.05 ? 1.0 : 0.0,
+            builder: (context, thickness, _) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedGlassIndicator(
+                    velocity: velocity,
+                    itemCount: tools.length,
+                    alignment: Alignment(value, 0),
+                    thickness: thickness,
+                    quality: GlassQuality.premium,
+                    indicatorColor: scheme.primary.withValues(alpha: 0.28),
+                    isBackgroundIndicator: false,
+                    borderRadius: 16,
+                    padding: const EdgeInsets.all(4),
+                  ),
+                  // Icons paint above the glass so they stay sharp.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final tool in tools)
+                        SizedBox(
+                          width: itemWidth,
+                          child: Tooltip(
+                            message: tool.tooltip,
+                            child: IconButton(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                context.read<SettingsCubit>().setToolMode(
+                                  tool.mode,
+                                );
+                              },
+                              icon: Icon(tool.icon),
+                              iconSize: 26,
+                              color: settings.toolMode == tool.mode
+                                  ? scheme.primary
+                                  : scheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          );
         },
-        icon: Icon(icon),
-        color: active
-            ? Theme.of(context).colorScheme.primary
-            : (color ??
-                  Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6)),
-        iconSize: 28,
       ),
     );
   }

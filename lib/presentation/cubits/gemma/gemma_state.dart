@@ -5,11 +5,8 @@ part 'gemma_state.freezed.dart';
 class UiChatMessage {
   final String text;
   final bool isUser;
-  
-  const UiChatMessage({
-    required this.text,
-    required this.isUser,
-  });
+
+  const UiChatMessage({required this.text, required this.isUser});
 }
 
 @freezed

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import 'package:logic_canvas/data/services/gemma_service.dart';
@@ -32,27 +33,105 @@ class GemmaCubit extends Cubit<GemmaState> {
       return;
     }
 
+    // Retrying after a failure must not stack a second listener on the shared
+    // progress stream, and must not leave the previous error on screen.
+    await _progressSub?.cancel();
+    _progressSub = null;
+
     emit(
-      state.copyWith(status: GemmaStatus.downloading, downloadProgress: 0.0),
+      GemmaState(
+        status: GemmaStatus.downloading,
+        downloadProgress: 0.0,
+        chatHistory: state.chatHistory,
+      ),
     );
 
     _progressSub = _gemmaService.downloadProgress.listen((progress) {
+      if (isClosed) return;
       emit(state.copyWith(downloadProgress: progress));
     });
 
     try {
       await _gemmaService.installModel();
+      if (isClosed) return;
       emit(state.copyWith(status: GemmaStatus.ready, downloadProgress: 1.0));
     } catch (e) {
+      if (isClosed) return;
       emit(
-        state.copyWith(status: GemmaStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: GemmaStatus.error,
+          downloadProgress: 0.0,
+          errorMessage: _readableDownloadError(e),
+        ),
       );
+    } finally {
+      await _progressSub?.cancel();
+      _progressSub = null;
     }
   }
 
+  @visibleForTesting
+  static String readableDownloadErrorForTest(Object error) =>
+      _readableDownloadError(error);
+
+  /// Turns plumbing exceptions into something a person can act on.
+  static String _readableDownloadError(Object error) {
+    final text = error.toString();
+    final lower = text.toLowerCase();
+
+    if (lower.contains('socket') ||
+        lower.contains('network') ||
+        lower.contains('connection') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout')) {
+      return 'The download was interrupted. Check your connection and try '
+          'again — it will start over from the beginning.';
+    }
+    if (lower.contains('no space') ||
+        lower.contains('storage') ||
+        lower.contains('enospc')) {
+      return 'There is not enough free space for the model (about 1.7 GB). '
+          'Free some space and try again.';
+    }
+    if (lower.contains('http 4') || lower.contains('http 5')) {
+      return 'The model could not be reached right now. Try again later.';
+    }
+    return 'The download failed and nothing was kept. Try again.\n\n$text';
+  }
+
+  @visibleForTesting
+  static String readableInferenceErrorForTest(Object error) =>
+      _readableInferenceError(error);
+
+  /// The download path already spoke plainly; a failed reply used to dump the
+  /// raw exception into the chat instead.
+  static String _readableInferenceError(Object error) {
+    final lower = error.toString().toLowerCase();
+
+    if (lower.contains('timeout') || lower.contains('timed out')) {
+      return 'The model took too long to answer. Close other apps and try '
+          'again — if it keeps happening, delete and re-download the model in '
+          'the sidebar.';
+    }
+    if (lower.contains('memory') || lower.contains('oom')) {
+      return 'The device ran out of memory for the model. Close other apps and '
+          'try again.';
+    }
+    if (lower.contains('not installed') ||
+        lower.contains('no such file') ||
+        lower.contains('cannot find')) {
+      return 'The AI model is missing from this device. Download it again in '
+          'the sidebar.';
+    }
+    return 'The AI could not finish that answer. Try asking again, with a '
+        'shorter question if it keeps failing.';
+  }
+
+  /// Removes the downloaded model from the device, freeing the disk space.
   Future<void> deleteModel() async {
-    await _gemmaService.markDeleted();
-    emit(const GemmaState(status: GemmaStatus.idle));
+    await _gemmaService.deleteDownloadedModel();
+    if (isClosed) return;
+    emit(GemmaState(status: GemmaStatus.idle, chatHistory: state.chatHistory));
   }
 
   Future<void> generateAiResponse({
@@ -120,8 +199,20 @@ class GemmaCubit extends Cubit<GemmaState> {
         ),
       );
     } catch (e) {
-      emit(state.copyWith(aiLoading: false, aiError: e.toString()));
+      emit(
+        state.copyWith(aiLoading: false, aiError: _readableInferenceError(e)),
+      );
     }
+  }
+
+  /// Drops the model's memory of the conversation without clearing what the
+  /// user can see.
+  ///
+  /// Called when the board — and so the problem — changes. The service keeps
+  /// its own rolling history and feeds it into every prompt, so without this a
+  /// Two Sum discussion was still being sent as context for a graph problem.
+  void resetConversationContext() {
+    _gemmaService.clearHistory();
   }
 
   void clearAiResponse() {
@@ -190,7 +281,10 @@ class GemmaCubit extends Cubit<GemmaState> {
   @override
   Future<void> close() {
     _progressSub?.cancel();
-    _gemmaService.dispose();
+    // Free the loaded model, but leave the shared service usable. Fully
+    // disposing it here closed the singleton's progress stream for the whole
+    // app, which silently broke every later model download.
+    _gemmaService.releaseResources();
     return super.close();
   }
 }

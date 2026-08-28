@@ -1,18 +1,26 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:logic_canvas/core/injection.dart';
+import 'package:logic_canvas/data/algorithms/algorithm_traces.dart';
 import 'package:logic_canvas/data/datasources/static_problem_data.dart';
+import 'package:logic_canvas/data/services/board_serializer.dart';
 import 'package:logic_canvas/data/services/export_service.dart';
+import 'package:logic_canvas/presentation/widgets/viz/algorithm_player.dart';
 import 'package:logic_canvas/domain/entities/problem.dart';
 import 'package:logic_canvas/domain/entities/stroke.dart';
+import 'package:logic_canvas/domain/entities/viz_scene.dart';
 import 'package:logic_canvas/presentation/cubits/drawing/drawing_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/drawing/drawing_state.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_cubit.dart';
 import 'package:logic_canvas/presentation/cubits/gemma/gemma_state.dart';
 import 'package:logic_canvas/presentation/cubits/settings/settings_cubit.dart';
+import 'package:logic_canvas/presentation/cubits/entitlements/entitlements_cubit.dart';
 import 'package:logic_canvas/presentation/widgets/app_toast.dart';
+import 'package:logic_canvas/presentation/widgets/upgrade_dialog.dart';
 
 enum AiMode { ask, coach, dryRun }
 
@@ -40,6 +48,10 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   String? _problemDescription;
   List<String> _problemHints = const [];
   List<ProblemExample> _problemExamples = const [];
+  List<String> _coachingNotes = const [];
+  String? _problemId;
+  List<Stroke>? _cachedBoardStrokes;
+  BoardDescription? _cachedBoard;
 
   @override
   void initState() {
@@ -50,23 +62,83 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   void _loadProblemContext() {
     final drawState = context.read<DrawingCubit>().state;
     final problemId = drawState.boardProblems[drawState.activeBoardId];
-    if (problemId == null) return;
+    final Problem? problem = ProblemData.findById(problemId);
 
-    Problem? problem;
-    try {
-      problem = ProblemData.paretoProblems.firstWhere((p) => p.id == problemId);
-    } catch (_) {
-      try {
-        problem = ProblemData.starterPack.firstWhere((p) => p.id == problemId);
-      } catch (_) {}
+    if (problem == null) {
+      _problemId = null;
+      _problemTitle = null;
+      _problemDescription = null;
+      _problemHints = const [];
+      _problemExamples = const [];
+      _coachingNotes = const [];
+      return;
     }
 
-    if (problem != null) {
-      _problemTitle = problem.title;
-      _problemDescription = problem.description;
-      _problemHints = problem.hints;
-      _problemExamples = problem.examples;
+    _problemId = problem.id;
+    _problemTitle = problem.title;
+    _problemDescription = problem.description;
+    _problemHints = problem.hints;
+    _problemExamples = problem.examples;
+    _coachingNotes = problem.coachingNotes;
+  }
+
+  /// Reads the current board into text. This is the single biggest AI fix:
+  /// Ask mode used to send only a screenshot, so a small on-device model was
+  /// left guessing at handwriting it could not read — even though the app had
+  /// already recognised that handwriting into text.
+  BoardDescription _readBoard() {
+    final strokes = context.read<DrawingCubit>().state.activeStrokes;
+
+    // The panel rebuilds on every streamed token, and this is now read during
+    // build for the unread-board banner. The cubit hands out a new list on
+    // every board change, so list identity is an exact invalidation signal.
+    final cached = _cachedBoard;
+    if (cached != null && identical(strokes, _cachedBoardStrokes)) {
+      return cached;
     }
+
+    final described = BoardSerializer.describe(strokes);
+    _cachedBoardStrokes = strokes;
+    _cachedBoard = described;
+    return described;
+  }
+
+  /// Problem statement, examples and any per-problem corrections. Kept out of
+  /// the system prompt's rule list so the rules stay short.
+  String _problemBlock() {
+    if (_problemTitle == null) {
+      return 'No LeetCode problem is attached to this board.';
+    }
+
+    final buffer = StringBuffer()
+      ..writeln('PROBLEM: $_problemTitle')
+      ..writeln(_problemDescription ?? '');
+
+    if (_problemExamples.isNotEmpty) {
+      buffer.writeln('Examples:');
+      for (final e in _problemExamples.take(2)) {
+        buffer.writeln(
+          '  Input: ${e.input} → Output: ${e.output}'
+          '${e.explanation == null ? '' : ' (${e.explanation})'}',
+        );
+      }
+    }
+
+    if (_problemHints.isNotEmpty) {
+      buffer.writeln('Nudges you may draw one hint from, never all at once:');
+      for (final hint in _problemHints.take(3)) {
+        buffer.writeln('  - $hint');
+      }
+    }
+
+    if (_coachingNotes.isNotEmpty) {
+      buffer.writeln('Facts you must not contradict for this problem:');
+      for (final note in _coachingNotes) {
+        buffer.writeln('  - $note');
+      }
+    }
+
+    return buffer.toString().trimRight();
   }
 
   @override
@@ -181,143 +253,62 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     }
   }
 
+  /// Shared preamble for every mode. Short on purpose — the previous prompts
+  /// carried fifteen-plus rules each, including a hardcoded note about one
+  /// specific problem, and small models follow five rules far better.
+  String _basePrompt(String role) {
+    return '''$role
+
+${_problemBlock()}
+
+${_readBoard().text}
+
+Rules:
+- Answer only about the board and the problem above. For anything else reply exactly: "I am only your teacher for DSA and LeetCode topics. I cannot assist with other subjects."
+- The board transcription above is authoritative. If it does not contain what you need, say so and ask one clarifying question instead of guessing from the image.
+- Use $_preferredLanguage for any code.
+- Plain Markdown, no LaTeX. Write >= and <= directly.''';
+  }
+
   Future<String> _buildAskPrompt() async {
-    return '''You are an expert LeetCode tutor helping a user learn Data Structures and Algorithms.
-${_problemTitle != null ? 'The current problem is: $_problemTitle' : ''}
-${_problemDescription != null ? 'Description: $_problemDescription' : ''}
+    return _basePrompt('''You are a LeetCode tutor.
 
-I have provided an image of my whiteboard. Please analyze it carefully.
-
-CRITICAL RULES:
-- Use the Socratic Method: NEVER give away the full solution code or the direct answer.
-- Always ask leading questions to guide the user to the correct approach.
-- Prioritize correctness over sounding confident. If the board/text is unclear, ask one clarifying question and suggest the user tap "Next hint" again after updating the board.
-- If the user says your advice is wrong or confusing, acknowledge uncertainty, ask what invariant they are using, and give a smaller next hint instead of doubling down.
-- For Longest Repeating Character Replacement / sliding-window with max frequency: the valid-window check is usually windowLength - maxFrequency <= k. Do NOT tell the user to decrease/recompute maxFrequency inside the shrink loop unless explicitly discussing a slower exact variant; a stale non-decreasing maxFrequency is acceptable for the standard O(n) solution.
-- EXCEPTION: If the user asks you to read, clean, or rewrite their notes from the board, DO SO IMMEDIATELY. Output EXACTLY AND ONLY the transcribed text formatted beautifully in Markdown. Do NOT add any conversational filler like "Here is the cleaned version" or "Here are your notes". If the board is empty or illegible, say EXACTLY: "Please zoom to the proper section so I can see it clearly."
-- If asked for time complexity, explain how to calculate it rather than just giving the answer.
-- Keep responses extremely concise (under 150 words).
-- OUT OF BOUNDS TOPICS: If the user asks ANY question completely unrelated to Data Structures, Algorithms, LeetCode, programming, or the whiteboard, you MUST refuse to answer and reply with EXACTLY: "I am only your teacher for DSA and LeetCode topics. I cannot assist with other subjects."
-- Use Markdown formatting and bullet points for readability. DO NOT use LaTeX math formatting; write comparisons like >= and avoid dollar-delimited math.
-- Whenever you write or suggest code snippets, use $_preferredLanguage.
-- Be encouraging and supportive.''';
+Guide with questions; do not hand over the full solution unless asked outright.
+Keep it under 150 words.''');
   }
 
   Future<String> _buildDryRunPrompt() async {
-    return '''You are a friendly DSA tutor reviewing a student's whiteboard sketch for a coding problem.
+    return _basePrompt(
+      '''You are a mock interviewer reviewing the student's whiteboard.
 
-Problem: ${_problemTitle ?? 'Unknown'}
-Description: ${_problemDescription ?? 'Not available'}
-
-I have provided an image of my whiteboard. Please analyze the structural elements, logic, diagrams, and text.
-
-Your job is to act as a mock interviewer providing Socratic guidance:
-- Analyze their shapes, text, and connections to understand their mental model.
-- Do NOT criticize pen coordinates; focus on the logical structures (e.g., nodes, arrays, trees) represented.
-- Prioritize correctness over sounding confident. If the board/text is unclear, ask one clarifying question and suggest the user update the board, then ask for the next hint again.
-- If their approach looks correct, confirm it and ask them about edge cases or time complexity.
-- If it looks flawed or incomplete, ask a guiding question (e.g., "I see you have a tree structure, but how will you keep track of visited nodes?").
-- For Longest Repeating Character Replacement / sliding-window with max frequency: do not recommend decreasing/recomputing maxFrequency inside the shrink loop for the standard O(n) approach. The usual invariant is windowLength - maxFrequency <= k, with maxFrequency allowed to be stale/non-decreasing.
-- Whenever you write or suggest code snippets, use $_preferredLanguage.
-- OUT OF BOUNDS TOPICS: If the user asks ANY question completely unrelated to Data Structures, Algorithms, LeetCode, programming, or the whiteboard, you MUST refuse to answer and reply with EXACTLY: "I am only your teacher for DSA and LeetCode topics. I cannot assist with other subjects."
-- Keep it concise, engaging, and under 150 words.
-- DO NOT use LaTeX math formatting; write comparisons like >= and avoid dollar-delimited math.''';
-  }
-
-  String _buildBoardContext({bool includeProblem = true}) {
-    final drawState = context.read<DrawingCubit>().state;
-    final strokes = drawState.activeStrokes;
-    final counts = <StrokeType, int>{};
-    final textNotes = <String>[];
-
-    for (final stroke in strokes) {
-      counts[stroke.type] = (counts[stroke.type] ?? 0) + 1;
-      final text = stroke.text?.trim();
-      if (stroke.type == StrokeType.text && text != null && text.isNotEmpty) {
-        textNotes.add(text);
-      }
-    }
-
-    final typeSummary = counts.entries
-        .map((entry) => '${entry.key.name}: ${entry.value}')
-        .join(', ');
-    final examples = _problemExamples
-        .take(2)
-        .map((e) {
-          final explanation = e.explanation == null
-              ? ''
-              : ' Explanation: ${e.explanation}';
-          return 'Input: ${e.input}; Output: ${e.output}.$explanation';
-        })
-        .join('\n');
-
-    final boardContext =
-        '''
-Current board:
-- Board id: ${drawState.activeBoardId}
-- Stroke count: ${strokes.length}
-- Stroke types: ${typeSummary.isEmpty ? 'none' : typeSummary}
-- Text notes on board:
-${textNotes.isEmpty ? '  none' : textNotes.take(8).map((note) => '  - $note').join('\n')}''';
-
-    if (!includeProblem) return boardContext;
-
-    return '''
-$boardContext
-
-Problem context:
-- Title: ${_problemTitle ?? 'Unknown'}
-- Description: ${_problemDescription ?? 'Not available'}
-- Examples:
-${examples.isEmpty ? '  none' : examples}
-- Built-in hints for reference only:
-${_problemHints.isEmpty ? '  none' : _problemHints.take(3).map((hint) => '  - $hint').join('\n')}''';
+Judge the logic, not the handwriting. If the approach works, confirm it and ask about an edge case or the complexity. If it is flawed, name the exact step that breaks before suggesting anything.
+Keep it under 150 words.''',
+    );
   }
 
   Future<String> _buildCoachPrompt(String action) async {
-    final boardContext = _buildBoardContext();
-    return '''You are Logic Canvas Coach, an on-device LeetCode interviewer.
+    return _basePrompt('''You are a LeetCode coach giving one focused next step.
 
-$boardContext
+Requested: $action
 
-Coach action: $action
-
-Rules:
-- Use the screenshot and board context together.
-- Do not give full solution code unless the user explicitly asks for code.
-- Prioritize correctness over sounding confident.
-- If you are unsure what the user wrote or what invariant they are using, ask one clarifying question and tell them to update the board, then ask for the next hint again.
-- If the user's current logic seems wrong, name the exact invariant that fails before suggesting a change.
-- For Longest Repeating Character Replacement: do NOT tell the user to update/decrease/recompute maxFrequency inside the shrink loop for the standard O(n) sliding-window solution. The standard check is windowLength - maxFrequency <= k, and maxFrequency can remain stale/non-decreasing.
-- Prefer one focused next step over a full explanation.
-- If the board is empty, help from the problem statement and say what the user should draw/write next.
-- Mention at most one likely issue in the current approach.
-- Include a tiny "Try next" task the user can do on the board.
-- If discussing complexity, explain the reasoning briefly.
-- Use $_preferredLanguage for any tiny snippet or variable names.
-- Keep the response under 120 words.
-- Use Markdown bullets. Do not use LaTeX.''';
+Give at most one issue and one small "Try next" task the student can do on the board. If the board is empty, say what to draw first.
+Keep it under 120 words.''');
   }
 
+  /// Transcription only. Given the board text, this no longer depends on the
+  /// model reading handwriting out of an image.
   Future<String> _buildCleanNotesPrompt() async {
-    final boardContext = _buildBoardContext(includeProblem: false);
-    return '''You are a whiteboard transcription and cleanup tool.
+    final board = _readBoard();
+    return '''You are a transcription tool. You do not solve problems.
 
-$boardContext
+${board.text}
 
-Task: Clean Notes.
-
-STRICT RULES:
-- Only rewrite what is visible or explicitly written on the current board.
-- Do NOT solve the problem.
-- Do NOT add missing algorithm steps, code, hints, edge cases, complexity, or corrections from your own knowledge.
-- Do NOT use the problem statement to complete the user's notes.
-- If text is unclear, preserve it as "[unclear]" instead of guessing.
-- If the board has no readable notes, reply exactly: "Please zoom to the proper section so I can see it clearly."
-- Output clean Markdown notes only.
-- Do not say "Here are your notes", "Cleaned notes", or any conversational intro.
-- Keep the user's intent and wording, but fix spelling, spacing, and formatting.
-- Use normal programming symbols like <=, >=, !=. Do not use LaTeX.''';
+Rules:
+- Rewrite ONLY what is transcribed above, fixing spelling, spacing and formatting.
+- Add nothing: no algorithm steps, no code, no hints, no complexity, no corrections.
+- Keep anything unclear as "[unclear]".
+- If there are no readable notes, reply exactly: "There is nothing readable on this board yet. Turn on handwriting recognition in the toolbar, or type your notes, so I can read them."
+- Output the cleaned Markdown notes only, with no introduction.''';
   }
 
   Future<Uint8List?> _captureCanvas() async {
@@ -364,6 +355,20 @@ STRICT RULES:
 
   @override
   Widget build(BuildContext context) {
+    // Switching boards switches problems. The panel used to read the problem
+    // once in initState and never again, so it kept coaching the old one — and
+    // the model's own history carried that conversation across with it.
+    return BlocListener<DrawingCubit, DrawingState>(
+      listenWhen: (prev, curr) => prev.activeBoardId != curr.activeBoardId,
+      listener: (context, _) {
+        setState(_loadProblemContext);
+        context.read<GemmaCubit>().resetConversationContext();
+      },
+      child: _buildPanel(context),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context) {
     return BlocConsumer<GemmaCubit, GemmaState>(
       listenWhen: (prev, curr) =>
           prev.aiThinking != curr.aiThinking ||
@@ -480,11 +485,16 @@ STRICT RULES:
                     _modeChip(
                       AiMode.dryRun,
                       Icons.rate_review_rounded,
-                      'Dry Run',
+                      'Review',
                     ),
                     _languagePicker(context),
                   ],
                 ),
+              ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildVisionRow(context),
               ),
               const SizedBox(height: 12),
 
@@ -553,6 +563,27 @@ STRICT RULES:
                             ),
                           ),
                         ),
+
+                      Builder(
+                        builder: (context) {
+                          final board = _readBoard();
+                          final handwritingOn =
+                              context.select(
+                                (SettingsCubit c) =>
+                                    c.state.enableHandwritingRecognition,
+                              ) &&
+                              context.select(
+                                (EntitlementsCubit c) => c.state.isSubscribed,
+                              );
+                          if (!board.isUnrecognised || handwritingOn) {
+                            return const SizedBox.shrink();
+                          }
+                          return _buildUnreadBoardBanner(
+                            context,
+                            board.freehandCount,
+                          );
+                        },
+                      ),
 
                       if (_mode == AiMode.dryRun && !state.aiLoading)
                         Container(
@@ -946,7 +977,7 @@ STRICT RULES:
                               userMessage: isCleanNotes
                                   ? 'Clean only the current board notes. Do not solve or add new information.'
                                   : text,
-                              imageBytes: imageBytes,
+                              imageBytes: isCleanNotes ? null : imageBytes,
                               includeHistory: !isCleanNotes,
                             );
                             _controller.clear();
@@ -970,7 +1001,7 @@ STRICT RULES:
                         AiMode.dryRun => FilledButton.icon(
                           onPressed: _runDryRun,
                           icon: const Icon(Icons.rate_review_rounded, size: 16),
-                          label: const Text('Run Dry Run'),
+                          label: const Text('Review my board'),
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.teal,
                           ),
@@ -1047,11 +1078,31 @@ STRICT RULES:
         .toList();
     if (paragraphs.isEmpty) return;
 
-    const startX = 200.0;
-    var currentY = 200.0;
     const gap = 20.0;
 
     final cubit = context.read<DrawingCubit>();
+
+    // Below whatever is already on the board. This used to be a fixed
+    // (200,200), so a second answer was written straight on top of the first.
+    final existing = cubit.activeStrokes.where(
+      (s) => !s.isEraser && s.points.isNotEmpty,
+    );
+    var startX = 200.0;
+    var currentY = 200.0;
+    if (existing.isNotEmpty) {
+      var left = double.infinity;
+      var bottom = double.negativeInfinity;
+      for (final stroke in existing) {
+        final bounds = BoardSerializer.boundsOf(stroke);
+        left = math.min(left, bounds.left);
+        bottom = math.max(bottom, bounds.bottom);
+      }
+      startX = left;
+      currentY = bottom + 60;
+    }
+    final firstLine = Offset(startX, currentY);
+
+    final written = <Stroke>[];
     for (final para in paragraphs) {
       final textSpan = TextSpan(
         text: para.trim(),
@@ -1085,28 +1136,233 @@ STRICT RULES:
         type: StrokeType.text,
         text: para.trim(),
       );
-      cubit.addStroke(stroke);
+      written.add(stroke);
 
       // Increment by the actual rendered height + a gap between paragraphs
       currentY += textPainter.height + gap;
     }
 
-    // Auto-pan to the new text
-    context.read<SettingsCubit>().setTransformTransient(
-      zoomLevel: 1.0,
-      panOffset: const Offset(-100.0, -100.0),
+    // One action, so one undo takes the whole answer back off the board.
+    cubit.addStrokes(written);
+
+    // Scroll the answer into view without touching the zoom the user chose —
+    // this used to snap every write back to 100% at a hardcoded offset.
+    final settingsCubit = context.read<SettingsCubit>();
+    final zoom = settingsCubit.state.zoomLevel;
+    settingsCubit.setTransformTransient(
+      zoomLevel: zoom,
+      panOffset: const Offset(120, 160) - firstLine * zoom,
     );
-    context.read<SettingsCubit>().persistTransform();
+    settingsCubit.persistTransform();
 
     if (context.mounted) {
+      final count = written.length;
       AppToast.show(
         context,
-        message: 'Added to board — tap Undo to remove',
+        message: count == 1
+            ? 'Added to board — tap Undo to remove'
+            : 'Added $count blocks to the board — Undo removes all of them',
         actionLabel: 'Undo',
         onAction: () => cubit.undo(),
         duration: const Duration(seconds: 2), // 2 seconds per user request
       );
     }
+  }
+
+  /// Tells the user what the AI will actually be able to read from the board,
+  /// before they ask. When nothing was recognised, this is the difference
+  /// between "the AI is stupid" and "turn on handwriting recognition".
+  Widget _buildVisionRow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final trace = _problemId == null
+        ? null
+        : AlgorithmTraces.forProblem(_problemId!);
+
+    return BlocBuilder<DrawingCubit, DrawingState>(
+      buildWhen: (prev, curr) =>
+          !identical(prev.boards, curr.boards) ||
+          prev.activeBoardId != curr.activeBoardId,
+      builder: (context, drawState) {
+        final seen = BoardSerializer.describe(drawState.activeStrokes);
+        final warn = seen.isEmpty || seen.isUnrecognised;
+        final color = warn ? const Color(0xFFE0A11B) : scheme.primary;
+
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Tooltip(
+              message: seen.isEmpty
+                  ? 'Nothing on this board yet.'
+                  : seen.isUnrecognised
+                  ? 'Your drawing has not been recognised as text or shapes, '
+                        'so the AI is working from the picture alone. Turn on '
+                        'handwriting recognition in the toolbar for much '
+                        'better answers.'
+                  : 'The AI reads these directly, not just from a screenshot.',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      warn
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 13,
+                      color: color,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'AI sees: ${seen.chipLabel}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (trace != null)
+              ActionChip(
+                avatar: const Icon(Icons.play_circle_outline_rounded, size: 16),
+                label: const Text(
+                  'Watch it step by step',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                onPressed: () => AlgorithmPlayerPage.open(
+                  context,
+                  trace,
+                  onCopyToBoard: _writeTraceToBoard,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Drops the pattern's key idea onto the board as notes the student can
+  /// build on, rather than making them retype it.
+  void _writeTraceToBoard(AlgorithmTrace trace) {
+    final navigator = Navigator.of(context);
+    _writeResponseToBoard(
+      '${trace.title} — ${trace.pattern}\n\n'
+      '${trace.patternIdea}\n\n'
+      '${trace.pseudocode.join('\n')}\n\n'
+      'Time: ${trace.timeComplexity}\n'
+      'Space: ${trace.spaceComplexity}\n\n'
+      'Remember: ${trace.takeaway}',
+    );
+    if (navigator.canPop()) navigator.pop();
+  }
+
+  /// Shown when the board has ink on it that nothing recognised.
+  ///
+  /// Handwriting recognition ships off, and the prompts tell the model the
+  /// transcription is authoritative and not to guess from the picture. So the
+  /// default path — draw with the pencil, ask a question — was the model
+  /// politely refusing every time. Offer the switch instead of leaving the
+  /// user to find it in the toolbar.
+  Widget _buildUnreadBoardBanner(BuildContext context, int sketchCount) {
+    final isSubscribed = context.select(
+      (EntitlementsCubit c) => c.state.isSubscribed,
+    );
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orangeAccent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.visibility_off_rounded,
+                size: 18,
+                color: Colors.orange.shade700,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "I can see $sketchCount ${sketchCount == 1 ? "sketch" : "sketches"} "
+                  "but none of it has been turned into text yet, so I can only "
+                  "guess at what it says.",
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: Colors.orange.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  if (!isSubscribed) {
+                    UpgradeDialog.show(context);
+                    return;
+                  }
+                  context.read<SettingsCubit>().toggleHandwritingRecognition();
+                  AppToast.show(
+                    context,
+                    message:
+                        'Handwriting recognition is on. Write your next note '
+                        'and I will be able to read it.',
+                    duration: const Duration(seconds: 3),
+                  );
+                },
+                icon: const Icon(Icons.text_fields_rounded, size: 16),
+                label: Text(
+                  isSubscribed
+                      ? 'Turn on Paint to Text'
+                      : 'Unlock Paint to Text',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.orange.shade700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'It reads what you write from here on — anything already on the '
+            'board stays a sketch.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.3,
+              color: Colors.orange.shade800.withValues(alpha: 0.9),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCoachActions(BuildContext context) {
@@ -1327,7 +1583,7 @@ STRICT RULES:
         context.read<GemmaCubit>().generateAiResponse(
           systemPrompt: sysPrompt,
           userMessage: finalPrompt,
-          imageBytes: imageBytes,
+          imageBytes: isCleanNotes ? null : imageBytes,
           includeHistory: !isCleanNotes,
         );
         _controller.clear();
